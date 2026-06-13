@@ -32,8 +32,8 @@ body.im_modal_open {
     position: relative;
     display: flex;
     flex-direction: column;
-    width: min(1200px, 96vw);
-    height: min(900px, 94vh);
+    width: min(1400px, calc(100vw - 24px));
+    height: min(960px, calc(100vh - var(--topBarBlockSize, 0px) - 20px));
     background: var(--SmartThemeBlurTintColor, var(--SmartThemeBotMesBlurTintColor, #1a1a1a));
     color: var(--SmartThemeBodyColor, #e0e0e0);
     border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.1));
@@ -260,8 +260,9 @@ body.im_modal_open {
 
 /* ---------- Main ---------- */
 .im_main {
-    flex: 1;
+    flex: 1 1 auto;
     min-width: 0;
+    min-height: 0;   /* allow inner grid to scroll instead of overflowing */
     display: flex;
     flex-direction: column;
 }
@@ -271,12 +272,12 @@ body.im_modal_open {
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    padding: 10px 18px;
+    padding: 4px 14px;
     flex-wrap: wrap;
 }
 
 .im_breadcrumb {
-    font-size: 0.9rem;
+    font-size: 0.82rem;
     opacity: 0.85;
     display: flex;
     align-items: center;
@@ -318,14 +319,18 @@ body.im_modal_open {
 
 /* ---------- Grid ---------- */
 .im_grid {
-    --im-thumb: 140px; /* driven by the zoom slider via JS */
-    flex: 1;
+    --im-thumb: 200px; /* driven by the zoom slider via JS */
+    flex: 1 1 auto;
+    min-height: 0;        /* critical: lets the grid actually scroll inside flex */
     overflow-y: auto;
+    overflow-x: hidden;
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(var(--im-thumb), 1fr));
     gap: 12px;
-    padding: 14px 18px 24px;
+    padding: 10px 14px 18px;
     align-content: start;
+    /* smoother scrolling on touch */
+    -webkit-overflow-scrolling: touch;
 }
 
 .im_card {
@@ -652,18 +657,37 @@ body.im_modal_open {
 /* On smaller desktops, the dock overlays the chat edge rather than shrinking
  * it (shrinking the chat too far is worse than a light overlap). */
 
-/* ---------- Mobile ---------- */
-@media (max-width: 768px) {
-    /* Dock mode is not practical on phones — force the full-screen window
-     * layout regardless of the saved preference. */
+/* ============================================================
+ * RESPONSIVE — tablets & phones / any touch device
+ * Mirrors the layout strategy used by My-lorebook-manager:
+ *  - full-screen panel anchored below ST's top bar
+ *  - icon-only buttons (hide the text labels)
+ *  - sidebar overlays the grid (never resizes it)
+ *  - bigger touch targets
+ * ============================================================ */
+@media (max-width: 1000px), (pointer: coarse) {
+    .im_modal {
+        padding: 0;
+    }
+
+    /* Dock mode is not practical on small / touch screens — always full screen. */
+    .im_modal,
     .im_modal.im_dock {
         inset: 0;
         width: 100vw;
         max-width: 100vw;
+        display: flex;
         pointer-events: auto;
     }
 
+    .im_panel,
     .im_modal.im_dock .im_panel {
+        width: 100vw;
+        height: calc(100vh - var(--topBarBlockSize, 0px));
+        max-height: calc(100vh - var(--topBarBlockSize, 0px));
+        margin-top: var(--topBarBlockSize, 0px);
+        border-radius: 0;
+        border: none;
         border-left: none;
         box-shadow: none;
     }
@@ -673,87 +697,211 @@ body.im_modal_open {
         margin-right: 0 !important;
     }
 
-    .im_panel {
-        width: 100vw;
-        height: 100vh;
-        max-height: 100vh;
-        border-radius: 0;
-        border: none;
+    /* ---- Compact header: icons only, keep it on one line ---- */
+    .im_header {
+        padding: 6px 8px;
+        gap: 6px;
+        flex-wrap: nowrap;
     }
 
-    .im_modal {
-        padding: 0;
+    .im_header_copy {
+        flex: 1 1 auto;
+        min-width: 0;
+        gap: 2px 8px;
+    }
+
+    .im_header_copy h2 {
+        font-size: 0.95rem;
+    }
+
+    .im_header_copy p {
+        flex-basis: 100%;
+        white-space: nowrap;
+        font-size: 0.72rem;
+    }
+
+    .im_header_actions {
+        gap: 4px;
+        flex-wrap: nowrap;
+    }
+
+    .im_header_actions .menu_button {
+        min-width: 34px;
+        min-height: 34px;
+        padding: 0 8px;
+        justify-content: center;
+    }
+
+    .im_header_actions .menu_button span {
+        display: none; /* icon-only */
+    }
+
+    /* ---- Toolbar: search full-width, buttons as a flexible row ---- */
+    .im_toolbar {
+        padding: 5px 8px;
+        gap: 5px;
+    }
+
+    .im_search_wrap {
+        flex: 1 1 100%;
+        order: -1;
+        min-width: 0;
+    }
+
+    .im_search_wrap input {
+        min-height: 34px;
+    }
+
+    .im_toolbar > .menu_button {
+        flex: 1 1 auto;
+        min-height: 34px;
+        justify-content: center;
+        padding: 0 8px;
+    }
+
+    .im_toolbar > .menu_button span {
+        display: none; /* icon-only buttons (e.g. Clean Old) */
+    }
+
+    .im_toolbar > select {
+        min-height: 34px;
+        flex: 0 1 auto;
+        max-width: 120px;
+    }
+
+    .im_toggle {
+        font-size: 0.78rem;
+    }
+
+    /* Zoom slider spans its own line so it's easy to drag with a thumb. */
+    .im_zoom_wrap {
+        flex: 1 1 100%;
+        margin-left: 0;
+        justify-content: center;
+        padding: 2px 0;
+    }
+
+    .im_zoom_wrap input[type="range"] {
+        flex: 1 1 auto;
+        width: auto;
+        height: 28px; /* fat touch target */
+    }
+
+    /* ---- Select bar: icon-only too ---- */
+    .im_select_bar {
+        padding: 5px 8px;
+        gap: 4px;
+    }
+
+    .im_select_bar .menu_button span {
+        display: none;
+    }
+
+    .im_select_bar .menu_button {
+        min-width: 34px;
+        min-height: 34px;
+        justify-content: center;
+    }
+
+    /* ---- Main header compact ---- */
+    .im_main_header {
+        padding: 3px 8px;
+        gap: 6px;
+    }
+
+    .im_page_controls .menu_button {
+        min-width: 34px;
+        min-height: 34px;
+    }
+
+    /* ---- Sidebar overlays the grid; the toggle shows it ---- */
+    .im_content {
+        flex-direction: column;
+        position: relative;
     }
 
     .im_sidebar_toggle {
-        display: flex;
+        display: inline-flex;
         align-items: center;
         gap: 8px;
-        width: calc(100% - 36px);
-        margin: 10px 18px 0;
-        padding: 10px 12px;
+        align-self: flex-start;
+        margin: 6px 8px 0;
+        padding: 8px 12px;
+        min-height: 38px;
         background: rgba(255, 255, 255, 0.05);
-        border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.1));
+        border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.12));
         border-radius: 8px;
         color: inherit;
         cursor: pointer;
+        font-size: 0.85rem;
     }
 
     .im_sidebar_toggle_label {
-        flex: 1;
-        text-align: left;
+        max-width: 50vw;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
-    .im_content {
-        flex-direction: column;
+    .im_main {
+        flex: 1 1 auto;
+        min-height: 0;
     }
 
+    /* Sidebar is absolutely positioned over the grid so toggling it never
+       squeezes the thumbnails. */
     .im_sidebar {
         position: absolute;
-        top: 56px;
-        left: 0;
-        right: 0;
-        z-index: 5;
-        width: 100%;
-        max-height: 60vh;
+        top: 44px;
+        left: 8px;
+        right: 8px;
+        z-index: 30;
+        width: auto;
+        max-height: min(60vh, 420px);
+        overflow-y: auto;
+        border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.12));
+        border-radius: 12px;
         background: var(--SmartThemeBlurTintColor, #1a1a1a);
-        border-right: none;
-        border-bottom: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.1));
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
     }
 
     .im_sidebar.is-collapsed {
         display: none;
     }
 
+    .im_folder_item {
+        min-height: 42px; /* easy tap targets */
+    }
+
+    /* ---- Grid: respect the zoom slider but guarantee 2+ per row ---- */
     .im_grid {
-        /* Respect the zoom slider, but never let thumbnails get so wide that
-         * only one fits on a narrow phone — cap the effective min size. */
-        grid-template-columns: repeat(auto-fill, minmax(min(var(--im-thumb), 45vw), 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(min(var(--im-thumb), 46vw), 1fr));
         gap: 8px;
-        padding: 12px;
+        padding: 8px;
     }
 
+    /* No hover on touch — always show the action buttons (overlaid). */
     .im_card_actions {
-        opacity: 1; /* touch devices have no hover — always show actions */
+        opacity: 1;
+        gap: 8px;
+        padding: 6px;
+        justify-content: center;
     }
 
-    /* Keep the inline summary visible on mobile (it's the storage info) but
-     * let it wrap under the title instead of being hidden. */
-    .im_header_copy {
-        gap: 4px 10px;
+    .im_card_btn {
+        width: 38px;
+        height: 38px;
     }
 
-    .im_header_copy p {
-        flex-basis: 100%;
-        white-space: normal;
+    .im_card_check input {
+        width: 22px;
+        height: 22px;
     }
+}
 
-    /* The zoom slider can stay, but give it room and don't force it right. */
-    .im_zoom_wrap {
-        margin-left: 0;
-    }
-
-    .im_zoom_wrap input[type="range"] {
-        width: 90px;
+/* Extra-tight phones: let images go nearly full-width if the user zooms in. */
+@media (max-width: 480px) {
+    .im_grid {
+        grid-template-columns: repeat(auto-fill, minmax(min(var(--im-thumb), 90vw), 1fr));
     }
 }

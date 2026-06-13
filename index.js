@@ -25,9 +25,9 @@ const VIDEO_EXTENSIONS = ['mp4', 'webm', 'ogv', 'mov', 'mkv'];
 // through ST settings on purpose — zoom/dock are per-screen comfort settings).
 const LS_ZOOM = 'imageManager.zoom';
 const LS_MODE = 'imageManager.mode'; // 'modal' | 'dock'
-const ZOOM_MIN = 90;
-const ZOOM_MAX = 320;
-const ZOOM_DEFAULT = 140;
+const ZOOM_MIN = 110;
+const ZOOM_MAX = 480;
+const ZOOM_DEFAULT = 200;
 
 const DEFAULT_SETTINGS = Object.freeze({
     sort: 'date-desc',
