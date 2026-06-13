@@ -1,0 +1,12 @@
+{
+    "display_name": "Image Manager",
+    "loading_order": 100,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "Nufahi",
+    "version": "1.0.0",
+    "homePage": "https://github.com/Nufahi/ST-ImageManager",
+    "auto_update": false
+}

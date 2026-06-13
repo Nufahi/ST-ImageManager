@@ -1,0 +1,111 @@
+<div id="im_modal" class="im_modal im_hidden">
+    <div class="im_backdrop" data-im-action="close"></div>
+    <div class="im_panel">
+        <div class="im_header">
+            <div class="im_header_copy">
+                <h2><i class="fa-solid fa-images"></i> Image Manager</h2>
+                <p id="im_storage_summary">Browse, clean and free up space used by chat &amp; generated images.</p>
+            </div>
+            <div class="im_header_actions">
+                <button id="im_refresh" type="button" class="menu_button menu_button_icon interactable" title="Rescan all folders">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                    <span>Refresh</span>
+                </button>
+                <button id="im_close" type="button" class="menu_button menu_button_icon interactable" data-im-action="close" title="Close">
+                    <i class="fa-solid fa-xmark"></i>
+                    <span>Close</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Selection bar (shown when items are selected) -->
+        <div id="im_select_bar" class="im_select_bar im_hidden">
+            <span id="im_select_count" class="im_select_count">0 selected</span>
+            <span id="im_select_size" class="im_select_size"></span>
+            <button id="im_select_all" type="button" class="menu_button menu_button_icon interactable" title="Select everything currently shown">
+                <i class="fa-solid fa-check-double"></i>
+                <span>Select All</span>
+            </button>
+            <button id="im_deselect_all" type="button" class="menu_button menu_button_icon interactable" title="Clear selection">
+                <i class="fa-solid fa-xmark"></i>
+                <span>Cancel</span>
+            </button>
+            <button id="im_bulk_hide" type="button" class="menu_button menu_button_icon interactable" title="Hide selected from this manager (does not delete files)">
+                <i class="fa-solid fa-eye-slash"></i>
+                <span>Hide</span>
+            </button>
+            <button id="im_bulk_delete" type="button" class="menu_button menu_button_icon interactable im_btn_danger" title="Permanently delete selected files from the server">
+                <i class="fa-solid fa-trash-can"></i>
+                <span>Delete</span>
+            </button>
+        </div>
+
+        <div class="im_toolbar">
+            <div class="im_search_wrap">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input id="im_search" type="search" class="text_pole textarea_compact" placeholder="Search file names">
+            </div>
+            <select id="im_sort" class="text_pole textarea_compact" title="Sort images">
+                <option value="date-desc">Newest first</option>
+                <option value="date-asc">Oldest first</option>
+                <option value="name-asc">Name A-Z</option>
+                <option value="name-desc">Name Z-A</option>
+            </select>
+            <select id="im_page_size" class="text_pole textarea_compact" title="Images per page">
+                <option value="30">30 / page</option>
+                <option value="60">60 / page</option>
+                <option value="120">120 / page</option>
+                <option value="240">240 / page</option>
+            </select>
+            <button id="im_clean_old" type="button" class="menu_button menu_button_icon interactable" title="Bulk delete images older than a chosen age">
+                <i class="fa-solid fa-broom"></i>
+                <span>Clean Old</span>
+            </button>
+            <label class="im_toggle" title="Also show images you have hidden">
+                <input id="im_show_hidden" type="checkbox">
+                <span>Show hidden</span>
+            </label>
+        </div>
+
+        <div class="im_content">
+            <!-- Mobile sidebar toggle -->
+            <button id="im_sidebar_toggle" type="button" class="im_sidebar_toggle" aria-label="Toggle folder sidebar">
+                <i class="fa-solid fa-folder-tree" aria-hidden="true"></i>
+                <span id="im_sidebar_toggle_label" class="im_sidebar_toggle_label">All images</span>
+                <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+            </button>
+
+            <aside id="im_sidebar" class="im_sidebar is-collapsed">
+                <div class="im_sidebar_header">
+                    <h3>Folders</h3>
+                    <p>Each folder is a character's image folder on the server.</p>
+                </div>
+                <div id="im_folder_list" class="im_folder_list"></div>
+            </aside>
+
+            <section class="im_main">
+                <div class="im_main_header">
+                    <div id="im_breadcrumb" class="im_breadcrumb"></div>
+                    <div class="im_main_header_actions">
+                        <div id="im_summary" class="im_summary"></div>
+                        <div id="im_page_controls" class="im_page_controls">
+                            <button id="im_prev_page" type="button" class="menu_button menu_button_icon interactable" title="Previous page">
+                                <i class="fa-solid fa-chevron-left"></i>
+                            </button>
+                            <div id="im_page_label" class="im_summary"></div>
+                            <button id="im_next_page" type="button" class="menu_button menu_button_icon interactable" title="Next page">
+                                <i class="fa-solid fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div id="im_loading" class="im_status im_hidden">
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                    <span>Loading images...</span>
+                </div>
+                <div id="im_empty" class="im_status im_hidden"></div>
+                <div id="im_grid" class="im_grid"></div>
+            </section>
+        </div>
+    </div>
+</div>
