@@ -42,46 +42,96 @@ body.im_modal_open {
     overflow: hidden;
 }
 
-/* ---------- Header ---------- */
+/* ---------- Header (compact) ---------- */
 .im_header {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    padding: 14px 18px;
+    gap: 10px;
+    padding: 8px 14px;
     border-bottom: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.1));
+    flex-wrap: wrap;
+}
+
+.im_header_copy {
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
     flex-wrap: wrap;
 }
 
 .im_header_copy h2 {
     margin: 0;
-    font-size: 1.2rem;
+    font-size: 1.02rem;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 7px;
+    white-space: nowrap;
 }
 
+/* The summary now sits inline next to the title to save vertical space. */
 .im_header_copy p {
-    margin: 4px 0 0;
-    font-size: 0.82rem;
+    margin: 0;
+    font-size: 0.78rem;
     opacity: 0.7;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.im_summary_size {
+    opacity: 0.85;
 }
 
 .im_header_actions {
     display: flex;
-    gap: 8px;
+    gap: 6px;
     flex-wrap: wrap;
 }
 
-/* ---------- Toolbar ---------- */
+/* ---------- Toolbar (compact, single row, wraps if needed) ---------- */
 .im_toolbar,
 .im_select_bar {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 10px 18px;
+    gap: 6px;
+    padding: 6px 14px;
     border-bottom: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.08));
     flex-wrap: wrap;
+}
+
+/* Slightly smaller controls so the bar doesn't eat the gallery space. */
+.im_toolbar .menu_button,
+.im_select_bar .menu_button {
+    font-size: 0.8rem;
+    padding-block: 4px;
+}
+
+.im_toolbar .text_pole,
+.im_toolbar select {
+    height: 28px;
+    font-size: 0.8rem;
+}
+
+/* ---------- Zoom slider ---------- */
+.im_zoom_wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto; /* push to the right edge of the toolbar */
+    opacity: 0.85;
+}
+
+.im_zoom_wrap i {
+    font-size: 0.75rem;
+    opacity: 0.7;
+}
+
+.im_zoom_wrap input[type="range"] {
+    width: 110px;
+    cursor: pointer;
+    accent-color: var(--SmartThemeQuoteColor, #6a9cff);
 }
 
 .im_select_bar {
@@ -268,10 +318,11 @@ body.im_modal_open {
 
 /* ---------- Grid ---------- */
 .im_grid {
+    --im-thumb: 140px; /* driven by the zoom slider via JS */
     flex: 1;
     overflow-y: auto;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(var(--im-thumb), 1fr));
     gap: 12px;
     padding: 14px 18px 24px;
     align-content: start;
@@ -456,8 +507,172 @@ body.im_modal_open {
     margin: 0;
 }
 
+/* ---------- Clean-old PREVIEW popup ---------- */
+.im_clean_preview {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    text-align: left;
+    max-height: 70vh;
+}
+
+.im_clean_preview_head h3 {
+    margin: 0 0 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.im_clean_preview_head p {
+    margin: 0 0 8px;
+    font-size: 0.85rem;
+    opacity: 0.8;
+}
+
+.im_clean_preview_bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.im_clean_preview_count {
+    font-size: 0.82rem;
+    opacity: 0.75;
+    margin-left: auto;
+}
+
+.im_clean_preview_grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 10px;
+    overflow-y: auto;
+    padding: 4px;
+    flex: 1;
+    min-height: 0;
+}
+
+.im_clean_thumb {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: opacity 0.15s;
+}
+
+.im_clean_thumb.is-unchecked {
+    opacity: 0.4;
+}
+
+.im_clean_thumb > input[type="checkbox"] {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    z-index: 2;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    cursor: pointer;
+}
+
+.im_clean_thumb_frame {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 8px;
+    overflow: hidden;
+    border: 2px solid var(--SmartThemeQuoteColor, #6a9cff);
+}
+
+.im_clean_thumb.is-unchecked .im_clean_thumb_frame {
+    border-color: transparent;
+}
+
+.im_clean_thumb_media {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.im_clean_thumb_name {
+    font-size: 0.68rem;
+    opacity: 0.75;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+    .im_clean_preview_grid {
+        grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+    }
+}
+
+/* ============================================================
+ * DOCK MODE — pinned side panel that sits next to the chat
+ * (desktop only; on narrow screens it falls back to full screen)
+ * ============================================================ */
+.im_modal.im_dock {
+    /* Become a right-edge column instead of a centered overlay. */
+    inset: 0 0 0 auto;
+    width: var(--im-dock-width, 420px);
+    max-width: 90vw;
+    padding: 0;
+    display: block;
+    pointer-events: none; /* let the backdrop area pass clicks to the chat */
+}
+
+.im_modal.im_dock .im_backdrop {
+    display: none; /* no dimming in dock mode — chat stays usable */
+}
+
+.im_modal.im_dock .im_panel {
+    pointer-events: auto;
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0;
+    border: none;
+    border-left: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.15));
+    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.45);
+}
+
+/* Shift the chat over so the dock doesn't cover it. Only on wide screens. */
+@media (min-width: 1000px) {
+    body.im_dock_open #sheld {
+        max-width: calc(100% - var(--im-dock-width, 420px)) !important;
+        margin-right: var(--im-dock-width, 420px) !important;
+        transition: max-width 0.2s ease, margin-right 0.2s ease;
+    }
+}
+
+/* On smaller desktops, the dock overlays the chat edge rather than shrinking
+ * it (shrinking the chat too far is worse than a light overlap). */
+
 /* ---------- Mobile ---------- */
 @media (max-width: 768px) {
+    /* Dock mode is not practical on phones — force the full-screen window
+     * layout regardless of the saved preference. */
+    .im_modal.im_dock {
+        inset: 0;
+        width: 100vw;
+        max-width: 100vw;
+        pointer-events: auto;
+    }
+
+    .im_modal.im_dock .im_panel {
+        border-left: none;
+        box-shadow: none;
+    }
+
+    body.im_dock_open #sheld {
+        max-width: 100% !important;
+        margin-right: 0 !important;
+    }
+
     .im_panel {
         width: 100vw;
         height: 100vh;
@@ -511,16 +726,34 @@ body.im_modal_open {
     }
 
     .im_grid {
-        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        /* Respect the zoom slider, but never let thumbnails get so wide that
+         * only one fits on a narrow phone — cap the effective min size. */
+        grid-template-columns: repeat(auto-fill, minmax(min(var(--im-thumb), 45vw), 1fr));
         gap: 8px;
         padding: 12px;
     }
 
     .im_card_actions {
-        opacity: 1;
+        opacity: 1; /* touch devices have no hover — always show actions */
+    }
+
+    /* Keep the inline summary visible on mobile (it's the storage info) but
+     * let it wrap under the title instead of being hidden. */
+    .im_header_copy {
+        gap: 4px 10px;
     }
 
     .im_header_copy p {
-        display: none;
+        flex-basis: 100%;
+        white-space: normal;
+    }
+
+    /* The zoom slider can stay, but give it room and don't force it right. */
+    .im_zoom_wrap {
+        margin-left: 0;
+    }
+
+    .im_zoom_wrap input[type="range"] {
+        width: 90px;
     }
 }

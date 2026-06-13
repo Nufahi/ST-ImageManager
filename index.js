@@ -21,6 +21,14 @@ const PAGE_SIZE_OPTIONS = Object.freeze([30, 60, 120, 240]);
 
 const VIDEO_EXTENSIONS = ['mp4', 'webm', 'ogv', 'mov', 'mkv'];
 
+// localStorage keys for UI preferences that are device-specific (not synced
+// through ST settings on purpose — zoom/dock are per-screen comfort settings).
+const LS_ZOOM = 'imageManager.zoom';
+const LS_MODE = 'imageManager.mode'; // 'modal' | 'dock'
+const ZOOM_MIN = 90;
+const ZOOM_MAX = 320;
+const ZOOM_DEFAULT = 140;
+
 const DEFAULT_SETTINGS = Object.freeze({
     sort: 'date-desc',
     pageSize: 60,
@@ -50,6 +58,8 @@ const state = {
     dom: {},
     sizeQueue: [],
     sizeRunning: false,
+    zoom: ZOOM_DEFAULT, // thumbnail min size in px
+    mode: 'modal',      // 'modal' | 'dock'
 };
 
 /* ============================================================
@@ -113,6 +123,55 @@ function saveSettings() {
 
 function getHiddenSet() {
     return new Set(getSettings().hidden);
+}
+
+/* ---------- device-local UI preferences (localStorage) ---------- */
+function loadZoom() {
+    const raw = Number(localStorage.getItem(LS_ZOOM));
+    if (!isNaN(raw) && raw >= ZOOM_MIN && raw <= ZOOM_MAX) return raw;
+    return ZOOM_DEFAULT;
+}
+
+function saveZoom(value) {
+    localStorage.setItem(LS_ZOOM, String(value));
+}
+
+function loadMode() {
+    const raw = localStorage.getItem(LS_MODE);
+    return raw === 'dock' ? 'dock' : 'modal';
+}
+
+function saveMode(value) {
+    localStorage.setItem(LS_MODE, value === 'dock' ? 'dock' : 'modal');
+}
+
+/** Push the current zoom value into the grid via a CSS custom property. */
+function applyZoom() {
+    if (state.dom.grid) {
+        state.dom.grid.style.setProperty('--im-thumb', `${state.zoom}px`);
+    }
+    if (state.dom.zoom && Number(state.dom.zoom.value) !== state.zoom) {
+        state.dom.zoom.value = String(state.zoom);
+    }
+}
+
+/** Apply the modal/dock mode to the DOM and body. */
+function applyMode() {
+    const modal = state.dom.modal;
+    if (!modal) return;
+    const isDock = state.mode === 'dock';
+    modal.classList.toggle('im_dock', isDock);
+    document.body.classList.toggle('im_dock_open', isDock && state.isOpen);
+    // The modal scroll-lock only makes sense for the windowed mode.
+    document.body.classList.toggle('im_modal_open', !isDock && state.isOpen);
+    if (state.dom.dockLabel) {
+        state.dom.dockLabel.textContent = isDock ? 'Window' : 'Dock';
+    }
+    if (state.dom.dockToggle) {
+        state.dom.dockToggle.title = isDock
+            ? 'Restore as a floating window'
+            : 'Dock as a side panel next to the chat';
+    }
 }
 
 /* ============================================================
@@ -516,20 +575,32 @@ function renderSelectBar() {
 
 function updateStorageSummary() {
     if (!state.dom.storageSummary) return;
+
+    // File / folder counts come straight from the API's file lists, so they
+    // are always exact — no estimation involved.
     const totalCount = state.images.length;
+    const folderCount = state.folders.length;
+
     let known = 0;
     let counted = 0;
     for (const img of state.images) {
         const s = state.sizeCache.get(img.path);
         if (s != null) { known += s; counted++; }
     }
-    let text = `${totalCount} image${totalCount === 1 ? '' : 's'} across ${state.folders.length} folder${state.folders.length === 1 ? '' : 's'}`;
+
+    const countText = `${totalCount} image${totalCount === 1 ? '' : 's'} across ${folderCount} folder${folderCount === 1 ? '' : 's'}`;
+
+    // The size is measured lazily in the background; show it quietly and only
+    // mark it approximate while still scanning, without the confusing "N/M".
+    let sizeText = '';
     if (counted > 0) {
-        const approx = counted < totalCount ? '~' : '';
-        text += ` · ${approx}${humanSize(known)}`;
-        if (counted < totalCount) text += ` (measured ${counted}/${totalCount})`;
+        const stillScanning = counted < totalCount;
+        sizeText = `${stillScanning ? '~' : ''}${humanSize(known)}${stillScanning ? '…' : ''}`;
     }
-    state.dom.storageSummary.textContent = text;
+
+    state.dom.storageSummary.innerHTML = sizeText
+        ? `${escapeHtml(countText)} <span class="im_summary_size">· ${escapeHtml(sizeText)}</span>`
+        : escapeHtml(countText);
 }
 
 /* ============================================================
@@ -734,29 +805,20 @@ async function cleanOld() {
         return;
     }
 
-    // Measure their size for the confirmation
-    let known = 0;
-    let unknown = 0;
-    await Promise.all(matches.slice(0, 200).map(async (img) => {
-        let size = state.sizeCache.get(img.path);
-        if (size == null) {
-            size = await fetchSize(img.url);
-            state.sizeCache.set(img.path, size);
+    // Show a preview popup with a thumbnail for every match. Each one is
+    // checked by default; the user can untick anything they want to keep.
+    const selectedToDelete = await cleanOldPreview(matches, days);
+    if (!selectedToDelete || selectedToDelete.length === 0) {
+        if (selectedToDelete && selectedToDelete.length === 0) {
+            toastr.info('Nothing selected — no images deleted.');
         }
-        if (size != null) known += size;
-        else unknown++;
-    }));
-
-    const confirmed = await c.Popup.show.confirm(
-        `Delete ${matches.length} old image(s)?`,
-        `Older than ${days} day(s).<br><small>Frees about ${humanSize(known)}${unknown ? ' (some sizes unknown)' : ''}. This cannot be undone.</small>`,
-    );
-    if (!confirmed) return;
+        return;
+    }
 
     let success = 0;
     let failed = 0;
-    toastr.info(`Cleaning ${matches.length} image(s)...`);
-    for (const img of matches) {
+    toastr.info(`Cleaning ${selectedToDelete.length} image(s)...`);
+    for (const img of selectedToDelete) {
         const ok = await apiDeleteImage(img.path);
         if (ok) { removeImageFromState(img.path); success++; }
         else failed++;
@@ -765,6 +827,101 @@ async function cleanOld() {
     queueVisibleSizes();
     if (failed) toastr.warning(`Cleaned ${success}, failed ${failed}.`);
     else toastr.success(`Cleaned ${success} image(s).`);
+}
+
+/**
+ * Renders a confirmation popup that previews every image that will be deleted.
+ * Thumbnails are shown with a checkbox each (checked = will delete). The user
+ * can untick images to keep them. Returns the array of images to actually
+ * delete, or null if the user cancelled.
+ *
+ * NOTE: This never touches file names or paths — it only reads img.url for the
+ * preview and img.path for deletion, exactly as the rest of the manager does.
+ *
+ * @param {Array} matches Images matched by the age filter
+ * @param {number} days Age threshold (for the header)
+ * @returns {Promise<Array|null>}
+ */
+async function cleanOldPreview(matches, days) {
+    const c = ctx();
+
+    const wrap = document.createElement('div');
+    wrap.className = 'im_clean_preview';
+
+    const head = document.createElement('div');
+    head.className = 'im_clean_preview_head';
+    head.innerHTML = `
+        <h3><i class="fa-solid fa-broom"></i> Delete old images</h3>
+        <p>Found <b>${matches.length}</b> image(s) older than <b>${days}</b> day(s).
+        Untick anything you want to keep. <b>This cannot be undone.</b></p>
+        <div class="im_clean_preview_bar">
+            <button type="button" class="menu_button interactable" data-clean="all"><i class="fa-solid fa-check-double"></i> Select all</button>
+            <button type="button" class="menu_button interactable" data-clean="none"><i class="fa-solid fa-xmark"></i> Deselect all</button>
+            <span class="im_clean_preview_count"></span>
+        </div>
+    `;
+    wrap.appendChild(head);
+
+    const grid = document.createElement('div');
+    grid.className = 'im_clean_preview_grid';
+    grid.innerHTML = matches.map((img, i) => {
+        const media = img.isVideo
+            ? `<video class="im_clean_thumb_media" src="${escapeHtml(img.url)}" preload="metadata" muted></video>`
+            : `<img class="im_clean_thumb_media" src="${escapeHtml(img.url)}" loading="lazy" alt="">`;
+        return `<label class="im_clean_thumb" data-index="${i}">
+            <input type="checkbox" checked>
+            <span class="im_clean_thumb_frame">
+                ${media}
+                ${img.isVideo ? '<span class="im_card_badge"><i class="fa-solid fa-film"></i></span>' : ''}
+            </span>
+            <span class="im_clean_thumb_name" title="${escapeHtml(img.file)}">${escapeHtml(img.file)}</span>
+        </label>`;
+    }).join('');
+    wrap.appendChild(grid);
+
+    const updateCount = () => {
+        const checked = grid.querySelectorAll('input[type="checkbox"]:checked').length;
+        const countEl = head.querySelector('.im_clean_preview_count');
+        if (countEl) countEl.textContent = `${checked} of ${matches.length} will be deleted`;
+    };
+
+    grid.addEventListener('change', (e) => {
+        if (e.target instanceof HTMLInputElement) {
+            e.target.closest('.im_clean_thumb')?.classList.toggle('is-unchecked', !e.target.checked);
+            updateCount();
+        }
+    });
+
+    head.addEventListener('click', (e) => {
+        const btn = e.target instanceof Element ? e.target.closest('[data-clean]') : null;
+        if (!btn) return;
+        const on = btn.dataset.clean === 'all';
+        grid.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+            cb.checked = on;
+            cb.closest('.im_clean_thumb')?.classList.toggle('is-unchecked', !on);
+        });
+        updateCount();
+    });
+
+    updateCount();
+
+    const popup = new c.Popup(wrap, c.POPUP_TYPE.CONFIRM, '', {
+        okButton: 'Delete checked',
+        cancelButton: 'Cancel',
+        wide: true,
+        large: true,
+        allowVerticalScrolling: true,
+    });
+    const result = await popup.show();
+    if (result !== c.POPUP_RESULT.AFFIRMATIVE) return null;
+
+    const keep = [];
+    grid.querySelectorAll('.im_clean_thumb').forEach((el) => {
+        const idx = Number(el.dataset.index);
+        const cb = el.querySelector('input[type="checkbox"]');
+        if (cb && cb.checked && matches[idx]) keep.push(matches[idx]);
+    });
+    return keep;
 }
 
 /**
@@ -796,7 +953,8 @@ function openManager() {
 
     state.dom.modal.classList.remove('im_hidden');
     state.isOpen = true;
-    document.body.classList.add('im_modal_open');
+    applyMode();   // sets the correct body classes for modal vs dock
+    applyZoom();
     updateSidebarLabel();
     loadAll();
 }
@@ -806,6 +964,7 @@ function closeManager() {
     state.dom.modal.classList.add('im_hidden');
     state.isOpen = false;
     document.body.classList.remove('im_modal_open');
+    document.body.classList.remove('im_dock_open');
     state.selected.clear();
 }
 
@@ -846,6 +1005,9 @@ async function injectUI() {
         showHidden: $('im_show_hidden'),
         cleanOld: $('im_clean_old'),
         refresh: $('im_refresh'),
+        zoom: $('im_zoom'),
+        dockToggle: $('im_dock_toggle'),
+        dockLabel: document.querySelector('#im_dock_toggle .im_dock_label'),
         selectBar: $('im_select_bar'),
         selectCount: $('im_select_count'),
         selectSize: $('im_select_size'),
@@ -909,6 +1071,27 @@ function bindEvents() {
 
     d.cleanOld?.addEventListener('click', cleanOld);
 
+    // Thumbnail zoom slider — live updates the grid via a CSS variable and
+    // persists the choice locally. No re-render needed (pure CSS).
+    if (d.zoom) {
+        d.zoom.min = String(ZOOM_MIN);
+        d.zoom.max = String(ZOOM_MAX);
+        d.zoom.addEventListener('input', () => {
+            state.zoom = Number(d.zoom.value) || ZOOM_DEFAULT;
+            applyZoom();
+        });
+        d.zoom.addEventListener('change', () => {
+            saveZoom(state.zoom);
+        });
+    }
+
+    // Dock / window mode toggle.
+    d.dockToggle?.addEventListener('click', () => {
+        state.mode = state.mode === 'dock' ? 'modal' : 'dock';
+        saveMode(state.mode);
+        applyMode();
+    });
+
     d.prevPage?.addEventListener('click', () => {
         if (state.currentPage > 1) {
             state.currentPage--;
@@ -936,9 +1119,10 @@ function bindEvents() {
         d.sidebar?.classList.toggle('is-collapsed');
     });
 
-    // ESC closes
+    // ESC closes — only in windowed mode. In dock mode the panel is meant to
+    // stay open alongside the chat, so ESC should not dismiss it.
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && state.isOpen) closeManager();
+        if (e.key === 'Escape' && state.isOpen && state.mode !== 'dock') closeManager();
     });
 }
 
@@ -976,6 +1160,12 @@ async function init() {
     state.initialized = true;
 
     await injectUI();
+
+    // Restore device-local UI preferences.
+    state.zoom = loadZoom();
+    state.mode = loadMode();
+    applyZoom();
+    applyMode();
 
     // The wand container may not exist yet at load — retry a few times.
     if (!addWandButton()) {

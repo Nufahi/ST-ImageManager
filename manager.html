@@ -7,6 +7,10 @@
                 <p id="im_storage_summary">Browse, clean and free up space used by chat &amp; generated images.</p>
             </div>
             <div class="im_header_actions">
+                <button id="im_dock_toggle" type="button" class="menu_button menu_button_icon interactable" title="Dock as a side panel / restore window">
+                    <i class="fa-solid fa-table-columns"></i>
+                    <span class="im_dock_label">Dock</span>
+                </button>
                 <button id="im_refresh" type="button" class="menu_button menu_button_icon interactable" title="Rescan all folders">
                     <i class="fa-solid fa-arrows-rotate"></i>
                     <span>Refresh</span>
@@ -65,6 +69,11 @@
                 <input id="im_show_hidden" type="checkbox">
                 <span>Show hidden</span>
             </label>
+            <div class="im_zoom_wrap" title="Thumbnail size">
+                <i class="fa-solid fa-magnifying-glass-minus"></i>
+                <input id="im_zoom" type="range" min="90" max="320" step="10" value="140">
+                <i class="fa-solid fa-magnifying-glass-plus"></i>
+            </div>
         </div>
 
         <div class="im_content">
