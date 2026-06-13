@@ -55,11 +55,11 @@
                 <option value="name-asc">Name A-Z</option>
                 <option value="name-desc">Name Z-A</option>
             </select>
-            <select id="im_page_size" class="text_pole textarea_compact" title="Images per page">
-                <option value="30">30 / page</option>
-                <option value="60">60 / page</option>
-                <option value="120">120 / page</option>
-                <option value="240">240 / page</option>
+            <select id="im_page_size" class="text_pole textarea_compact" title="How many images to load per scroll batch">
+                <option value="30">Load 30</option>
+                <option value="60">Load 60</option>
+                <option value="120">Load 120</option>
+                <option value="240">Load 240</option>
             </select>
             <button id="im_clean_old" type="button" class="menu_button menu_button_icon interactable" title="Bulk delete images older than a chosen age">
                 <i class="fa-solid fa-broom"></i>
@@ -97,15 +97,7 @@
                     <div id="im_breadcrumb" class="im_breadcrumb"></div>
                     <div class="im_main_header_actions">
                         <div id="im_summary" class="im_summary"></div>
-                        <div id="im_page_controls" class="im_page_controls">
-                            <button id="im_prev_page" type="button" class="menu_button menu_button_icon interactable" title="Previous page">
-                                <i class="fa-solid fa-chevron-left"></i>
-                            </button>
-                            <div id="im_page_label" class="im_summary"></div>
-                            <button id="im_next_page" type="button" class="menu_button menu_button_icon interactable" title="Next page">
-                                <i class="fa-solid fa-chevron-right"></i>
-                            </button>
-                        </div>
+                        <div id="im_page_label" class="im_summary im_loaded_label"></div>
                     </div>
                 </div>
                 <div id="im_loading" class="im_status im_hidden">

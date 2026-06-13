@@ -54,6 +54,7 @@ const state = {
     pageSize: DEFAULT_SETTINGS.pageSize,
     showHidden: false,
     currentPage: 1,
+    visibleCount: 0,    // how many images are currently rendered (infinite scroll)
     selected: new Set(), // set of paths
     dom: {},
     sizeQueue: [],
@@ -291,7 +292,6 @@ async function loadAll() {
 
     state.isLoading = false;
     renderLoading(false);
-    clampPage();
     render();
 
     // Kick off lazy size fetching for visible page
@@ -373,17 +373,21 @@ function getFilteredImages() {
     return list;
 }
 
-function getPageImages() {
+/** Images currently rendered in the grid (infinite-scroll window). */
+function getVisibleImages() {
     const all = getFilteredImages();
-    const start = (state.currentPage - 1) * state.pageSize;
-    return all.slice(start, start + state.pageSize);
+    return all.slice(0, state.visibleCount);
 }
 
-function clampPage() {
-    const total = getFilteredImages().length;
-    const pages = Math.max(1, Math.ceil(total / state.pageSize));
-    state.currentPage = Math.min(Math.max(1, state.currentPage), pages);
-    return pages;
+/** Backwards-compatible alias — some callers (e.g. size queue, select-all)
+ *  ask for "what's on screen right now". */
+function getPageImages() {
+    return getVisibleImages();
+}
+
+/** Reset the infinite-scroll window back to the first batch. */
+function resetVisible() {
+    state.visibleCount = Math.min(state.pageSize, getFilteredImages().length);
 }
 
 /* ============================================================
@@ -394,6 +398,7 @@ function render() {
     renderFolders();
     renderBreadcrumb();
     renderGrid();
+    fillViewport();        // load enough cards to fill the visible area
     renderPageControls();
     renderSelectBar();
     updateStorageSummary();
@@ -466,11 +471,63 @@ function renderBreadcrumb() {
     state.dom.breadcrumb.innerHTML = `<i class="fa-solid fa-folder-open"></i> ${escapeHtml(label)}`;
 }
 
+/** Build the HTML for a single image card. */
+function cardHtml(img, hidden) {
+    const selected = state.selected.has(img.path) ? ' is-selected' : '';
+    const isHidden = hidden.has(img.path) ? ' is-hidden' : '';
+    const cachedSize = state.sizeCache.get(img.path);
+    const sizeText = cachedSize != null ? humanSize(cachedSize) : '…';
+    const media = img.isVideo
+        ? `<video class="im_card_media" src="${escapeHtml(img.url)}" preload="metadata" muted></video>`
+        : `<img class="im_card_media" src="${escapeHtml(img.url)}" loading="lazy" alt="">`;
+    const folderTag = state.activeFolder === ALL_FOLDERS
+        ? `<span class="im_card_folder" title="${escapeHtml(img.folderLabel)}"><i class="fa-solid fa-folder"></i> ${escapeHtml(img.folderLabel)}</span>`
+        : '';
+    return `<div class="im_card${selected}${isHidden}" data-path="${escapeHtml(img.path)}">
+        <div class="im_card_thumb">
+            ${media}
+            <label class="im_card_check" title="Select">
+                <input type="checkbox" ${state.selected.has(img.path) ? 'checked' : ''}>
+            </label>
+            ${img.isVideo ? '<span class="im_card_badge"><i class="fa-solid fa-film"></i></span>' : ''}
+            <div class="im_card_actions">
+                <button type="button" class="im_card_btn" data-act="view" title="View full size"><i class="fa-solid fa-expand"></i></button>
+                <button type="button" class="im_card_btn" data-act="hide" title="${hidden.has(img.path) ? 'Unhide' : 'Hide from manager'}"><i class="fa-solid ${hidden.has(img.path) ? 'fa-eye' : 'fa-eye-slash'}"></i></button>
+                <button type="button" class="im_card_btn im_card_btn_danger" data-act="delete" title="Delete file"><i class="fa-solid fa-trash-can"></i></button>
+            </div>
+        </div>
+        <div class="im_card_meta">
+            <span class="im_card_name" title="${escapeHtml(img.file)}">${escapeHtml(img.file)}</span>
+            <span class="im_card_size">${escapeHtml(sizeText)}</span>
+        </div>
+        ${folderTag}
+    </div>`;
+}
+
+/** Attach click/select handlers to one card element. */
+function wireCard(card) {
+    const path = card.dataset.path;
+    const img = state.images.find(i => i.path === path);
+
+    card.querySelector('.im_card_check input')?.addEventListener('change', (e) => {
+        toggleSelect(path, e.target.checked);
+    });
+
+    card.querySelectorAll('.im_card_btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const act = btn.dataset.act;
+            if (act === 'view') viewImage(img);
+            else if (act === 'hide') toggleHide(path);
+            else if (act === 'delete') deleteOne(img);
+        });
+    });
+}
+
 function renderGrid() {
     const grid = state.dom.grid;
     if (!grid) return;
 
-    const pageImages = getPageImages();
     const totalFiltered = getFilteredImages().length;
 
     if (totalFiltered === 0) {
@@ -483,72 +540,79 @@ function renderGrid() {
     }
     state.dom.empty.classList.add('im_hidden');
 
+    // (Re)build the first window from scratch.
+    resetVisible();
+    const hidden = getHiddenSet();
+    const visible = getVisibleImages();
+
+    grid.innerHTML = visible.map(img => cardHtml(img, hidden)).join('');
+    grid.querySelectorAll('.im_card').forEach(wireCard);
+
+    // Jump back to the top whenever the grid is fully re-rendered
+    // (folder change, search, sort, etc.).
+    grid.scrollTop = 0;
+}
+
+/**
+ * Append the next batch of images to the grid without touching the ones
+ * already rendered. Called by the scroll handler.
+ */
+function appendMore() {
+    const grid = state.dom.grid;
+    if (!grid) return;
+
+    const all = getFilteredImages();
+    if (state.visibleCount >= all.length) return; // nothing left
+
+    const start = state.visibleCount;
+    const end = Math.min(start + state.pageSize, all.length);
     const hidden = getHiddenSet();
 
-    grid.innerHTML = pageImages.map((img) => {
-        const selected = state.selected.has(img.path) ? ' is-selected' : '';
-        const isHidden = hidden.has(img.path) ? ' is-hidden' : '';
-        const cachedSize = state.sizeCache.get(img.path);
-        const sizeText = cachedSize != null ? humanSize(cachedSize) : '…';
-        const media = img.isVideo
-            ? `<video class="im_card_media" src="${escapeHtml(img.url)}" preload="metadata" muted></video>`
-            : `<img class="im_card_media" src="${escapeHtml(img.url)}" loading="lazy" alt="">`;
-        const folderTag = state.activeFolder === ALL_FOLDERS
-            ? `<span class="im_card_folder" title="${escapeHtml(img.folderLabel)}"><i class="fa-solid fa-folder"></i> ${escapeHtml(img.folderLabel)}</span>`
-            : '';
-        return `<div class="im_card${selected}${isHidden}" data-path="${escapeHtml(img.path)}">
-            <div class="im_card_thumb">
-                ${media}
-                <label class="im_card_check" title="Select">
-                    <input type="checkbox" ${state.selected.has(img.path) ? 'checked' : ''}>
-                </label>
-                ${img.isVideo ? '<span class="im_card_badge"><i class="fa-solid fa-film"></i></span>' : ''}
-                <div class="im_card_actions">
-                    <button type="button" class="im_card_btn" data-act="view" title="View full size"><i class="fa-solid fa-expand"></i></button>
-                    <button type="button" class="im_card_btn" data-act="hide" title="${hidden.has(img.path) ? 'Unhide' : 'Hide from manager'}"><i class="fa-solid ${hidden.has(img.path) ? 'fa-eye' : 'fa-eye-slash'}"></i></button>
-                    <button type="button" class="im_card_btn im_card_btn_danger" data-act="delete" title="Delete file"><i class="fa-solid fa-trash-can"></i></button>
-                </div>
-            </div>
-            <div class="im_card_meta">
-                <span class="im_card_name" title="${escapeHtml(img.file)}">${escapeHtml(img.file)}</span>
-                <span class="im_card_size">${escapeHtml(sizeText)}</span>
-            </div>
-            ${folderTag}
-        </div>`;
-    }).join('');
+    const fragmentHtml = all.slice(start, end).map(img => cardHtml(img, hidden)).join('');
+    grid.insertAdjacentHTML('beforeend', fragmentHtml);
 
-    // Wire up card events
-    grid.querySelectorAll('.im_card').forEach((card) => {
-        const path = card.dataset.path;
-        const img = state.images.find(i => i.path === path);
+    // Wire only the freshly added cards.
+    const newCards = Array.from(grid.querySelectorAll('.im_card')).slice(start);
+    newCards.forEach(wireCard);
 
-        card.querySelector('.im_card_check input')?.addEventListener('change', (e) => {
-            toggleSelect(path, e.target.checked);
-        });
+    state.visibleCount = end;
+    renderPageControls();
+    queueVisibleSizes();
+}
 
-        card.querySelectorAll('.im_card_btn').forEach((btn) => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const act = btn.dataset.act;
-                if (act === 'view') viewImage(img);
-                else if (act === 'hide') toggleHide(path);
-                else if (act === 'delete') deleteOne(img);
-            });
-        });
-    });
+/** True when the grid is scrolled close to the bottom. */
+function isNearBottom(el, threshold = 600) {
+    return el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+}
+
+/**
+ * If the visible content doesn't fill the viewport yet (e.g. very tall
+ * window, few large thumbs), keep loading until it does or we run out.
+ */
+function fillViewport() {
+    const grid = state.dom.grid;
+    if (!grid) return;
+    let guard = 0;
+    while (
+        guard++ < 50 &&
+        state.visibleCount < getFilteredImages().length &&
+        grid.scrollHeight <= grid.clientHeight + 50
+    ) {
+        appendMore();
+    }
 }
 
 function renderPageControls() {
-    const pages = clampPage();
     const total = getFilteredImages().length;
+    const shown = Math.min(state.visibleCount, total);
     if (state.dom.pageLabel) {
-        state.dom.pageLabel.textContent = `Page ${state.currentPage} / ${pages}`;
+        state.dom.pageLabel.textContent = total > 0
+            ? (shown >= total ? `${total}` : `${shown} / ${total}`)
+            : '';
     }
     if (state.dom.summary) {
         state.dom.summary.textContent = `${total} image${total === 1 ? '' : 's'}`;
     }
-    if (state.dom.prevPage) state.dom.prevPage.disabled = state.currentPage <= 1;
-    if (state.dom.nextPage) state.dom.nextPage.disabled = state.currentPage >= pages;
 }
 
 function renderSelectBar() {
@@ -1092,23 +1156,10 @@ function bindEvents() {
         applyMode();
     });
 
-    d.prevPage?.addEventListener('click', () => {
-        if (state.currentPage > 1) {
-            state.currentPage--;
-            renderGrid();
-            renderPageControls();
-            queueVisibleSizes();
-        }
-    });
-    d.nextPage?.addEventListener('click', () => {
-        const pages = clampPage();
-        if (state.currentPage < pages) {
-            state.currentPage++;
-            renderGrid();
-            renderPageControls();
-            queueVisibleSizes();
-        }
-    });
+    // Infinite scroll: load the next batch as the user nears the bottom.
+    d.grid?.addEventListener('scroll', () => {
+        if (isNearBottom(d.grid)) appendMore();
+    }, { passive: true });
 
     d.selectAll?.addEventListener('click', selectAllVisible);
     d.deselectAll?.addEventListener('click', clearSelection);
