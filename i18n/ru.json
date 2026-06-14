@@ -16,6 +16,8 @@
   "select.allTitle": "Выбрать ВСЕ изображения в текущем виде (на всех страницах)",
   "select.cancel": "Отмена",
   "select.cancelTitle": "Снять выделение",
+  "select.download": "Скачать",
+  "select.downloadTitle": "Скачать выбранные файлы на устройство",
   "select.hide": "Скрыть",
   "select.hideTitle": "Скрыть выбранные из менеджера (файлы не удаляются)",
   "select.delete": "Удалить",
@@ -77,6 +79,11 @@
   "toast.deleted.many": "Удалено изображений: {{count}}.",
   "toast.deleteFailed": "Не удалось удалить изображение.",
   "toast.deletePartial": "Удалено {{success}}, не удалось {{failed}}.",
+
+  "toast.downloading": "Скачивание изображений: {{count}}...",
+  "toast.downloaded": "Скачано изображений: {{count}}.",
+  "toast.downloadFailed": "Не удалось скачать изображение(я).",
+  "toast.downloadPartial": "Скачано {{success}}, не удалось {{failed}}.",
 
   "slash.help": "Открывает Менеджер изображений.",
 

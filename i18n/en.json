@@ -16,6 +16,8 @@
   "select.allTitle": "Select ALL images in the current view (every page)",
   "select.cancel": "Cancel",
   "select.cancelTitle": "Clear selection",
+  "select.download": "Download",
+  "select.downloadTitle": "Download selected files to your device",
   "select.hide": "Hide",
   "select.hideTitle": "Hide selected from this manager (does not delete files)",
   "select.delete": "Delete",
@@ -77,6 +79,11 @@
   "toast.deleted.many": "Deleted {{count}} image(s).",
   "toast.deleteFailed": "Failed to delete image.",
   "toast.deletePartial": "Deleted {{success}}, failed {{failed}}.",
+
+  "toast.downloading": "Downloading {{count}} image(s)...",
+  "toast.downloaded": "Downloaded {{count}} image(s).",
+  "toast.downloadFailed": "Failed to download image(s).",
+  "toast.downloadPartial": "Downloaded {{success}}, failed {{failed}}.",
 
   "slash.help": "Opens the Image Manager.",
 

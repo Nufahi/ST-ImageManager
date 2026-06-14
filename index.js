@@ -1205,6 +1205,59 @@ function toggleHide(path) {
     queueVisibleSizes();
 }
 
+/**
+ * Download every selected file to the user's device. Browsers block multiple
+ * rapid programmatic downloads and ignore the `download` attribute for
+ * cross-origin/blob-less links, so we fetch each file as a Blob and save it via
+ * an object URL, spacing the saves out slightly so none get dropped. A single
+ * selected file downloads immediately; many files are saved one after another.
+ */
+async function downloadOne(img) {
+    // Fetch the bytes ourselves so the browser keeps the original filename and
+    // doesn't just navigate to / open the image instead of saving it.
+    const res = await fetch(img.url, { headers: reqHeaders({}) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const objUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objUrl;
+    a.download = img.file; // suggest the original file name
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // Revoke a touch later so the download has time to start.
+    setTimeout(() => URL.revokeObjectURL(objUrl), 4000);
+}
+
+async function bulkDownload() {
+    if (!state.selected.size) return;
+    const paths = [...state.selected];
+    const imgs = paths
+        .map(p => state.images.find(i => i.path === p))
+        .filter(Boolean);
+    if (!imgs.length) return;
+
+    toastr.info(t('toast.downloading', { count: imgs.length }));
+
+    let success = 0;
+    let failed = 0;
+    for (const img of imgs) {
+        try {
+            await downloadOne(img);
+            success++;
+        } catch (error) {
+            console.error(`[${MODULE_NAME}] download failed for "${img.path}"`, error);
+            failed++;
+        }
+        // Small gap so the browser doesn't drop back-to-back saves.
+        if (imgs.length > 1) await new Promise(r => setTimeout(r, 300));
+    }
+
+    if (failed && success) toastr.warning(t('toast.downloadPartial', { success, failed }));
+    else if (failed) toastr.error(t('toast.downloadFailed'));
+    else toastr.success(t('toast.downloaded', { count: success }));
+}
+
 async function bulkHide() {
     if (!state.selected.size) return;
     const s = getSettings();
@@ -1472,6 +1525,7 @@ async function injectUI() {
         selectAllFiltered: $('im_select_all_filtered'),
         toolbarSelectAll: $('im_toolbar_select_all'),
         deselectAll: $('im_deselect_all'),
+        bulkDownload: $('im_bulk_download'),
         bulkHide: $('im_bulk_hide'),
         bulkDelete: $('im_bulk_delete'),
     };
@@ -1550,6 +1604,7 @@ function bindEvents() {
     d.selectAllFiltered?.addEventListener('click', selectAllFiltered);
     d.toolbarSelectAll?.addEventListener('click', selectAllFiltered);
     d.deselectAll?.addEventListener('click', clearSelection);
+    d.bulkDownload?.addEventListener('click', bulkDownload);
     d.bulkHide?.addEventListener('click', bulkHide);
     d.bulkDelete?.addEventListener('click', bulkDelete);
 
