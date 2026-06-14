@@ -7,9 +7,9 @@
                 <p id="im_storage_summary">Browse, clean and free up space used by chat &amp; generated images.</p>
             </div>
             <div class="im_header_actions">
-                <button id="im_dock_toggle" type="button" class="menu_button menu_button_icon interactable im_icon_only" title="Dock as a side panel / restore window">
-                    <i class="fa-solid fa-table-columns"></i>
-                    <span class="im_dock_label">Dock</span>
+                <button id="im_float_toggle" type="button" class="menu_button menu_button_icon interactable im_icon_only" title="Toggle floating movable window">
+                    <i class="fa-solid fa-up-down-left-right"></i>
+                    <span class="im_float_label">Float</span>
                 </button>
                 <button id="im_refresh" type="button" class="menu_button menu_button_icon interactable im_icon_only" title="Rescan all folders">
                     <i class="fa-solid fa-arrows-rotate"></i>
@@ -68,9 +68,6 @@
             <button id="im_toolbar_select_all" type="button" class="menu_button menu_button_icon interactable im_icon_only" title="Select ALL images in the current view (every page)">
                 <i class="fa-solid fa-check-double"></i>
             </button>
-            <button id="im_clean_old" type="button" class="menu_button menu_button_icon interactable im_icon_only" title="Bulk delete images older than a chosen age">
-                <i class="fa-solid fa-broom"></i>
-            </button>
             <label class="im_toggle im_toggle_icon" title="Also show images you have hidden">
                 <input id="im_show_hidden" type="checkbox">
                 <i class="fa-solid fa-eye-low-vision"></i>
@@ -114,5 +111,6 @@
                 <div id="im_grid" class="im_grid"></div>
             </section>
         </div>
+        <div id="im_resize_handle" class="im_resize_handle" title="Drag to resize"></div>
     </div>
 </div>

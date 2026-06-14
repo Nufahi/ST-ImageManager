@@ -21,8 +21,9 @@ const PAGE_SIZE_OPTIONS = Object.freeze([10, 20, 30, 60, 120, 240]);
 
 const VIDEO_EXTENSIONS = ['mp4', 'webm', 'ogv', 'mov', 'mkv'];
 
-// localStorage key for the device-local dock/window preference.
-const LS_MODE = 'imageManager.mode'; // 'modal' | 'dock'
+// localStorage keys for device-local UI preferences.
+const LS_MODE = 'imageManager.mode';     // 'modal' | 'floating'
+const LS_FLOAT = 'imageManager.floatBox'; // { left, top, width, height }
 
 const DEFAULT_SETTINGS = Object.freeze({
     sort: 'date-desc',
@@ -53,7 +54,8 @@ const state = {
     dom: {},
     sizeQueue: [],
     sizeRunning: false,
-    mode: 'modal',      // 'modal' | 'dock'
+    mode: 'modal',      // 'modal' (centered) | 'floating' (movable window)
+    floatBox: null,     // { left, top, width, height } when floating
 };
 
 /* ============================================================
@@ -122,38 +124,170 @@ function getHiddenSet() {
 /* ---------- device-local UI preferences (localStorage) ---------- */
 function loadMode() {
     const raw = localStorage.getItem(LS_MODE);
-    return raw === 'dock' ? 'dock' : 'modal';
+    return raw === 'floating' ? 'floating' : 'modal';
 }
 
 function saveMode(value) {
-    localStorage.setItem(LS_MODE, value === 'dock' ? 'dock' : 'modal');
+    localStorage.setItem(LS_MODE, value === 'floating' ? 'floating' : 'modal');
 }
 
+function loadFloatBox() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(LS_FLOAT) || 'null');
+        if (raw && typeof raw === 'object'
+            && Number.isFinite(raw.left) && Number.isFinite(raw.top)
+            && Number.isFinite(raw.width) && Number.isFinite(raw.height)) {
+            return raw;
+        }
+    } catch (e) { /* ignore */ }
+    return null;
+}
 
-/** True on phones / narrow screens / touch — where dock mode makes no sense
- *  and the panel should always be the full-screen layout. */
+function saveFloatBox(box) {
+    try { localStorage.setItem(LS_FLOAT, JSON.stringify(box)); } catch (e) { /* ignore */ }
+}
+
+/** A sensible default window box (top-right area, clamped to the viewport). */
+function defaultFloatBox() {
+    const width = Math.min(460, window.innerWidth - 24);
+    const height = Math.min(640, window.innerHeight - 24);
+    const left = Math.max(12, window.innerWidth - width - 24);
+    const top = Math.max(12, (window.innerHeight - height) / 3);
+    return { left, top, width, height };
+}
+
+/** Keep a box inside the viewport. */
+function clampFloatBox(box) {
+    const minW = 320, minH = 300;
+    box.width = Math.min(Math.max(minW, box.width), window.innerWidth - 8);
+    box.height = Math.min(Math.max(minH, box.height), window.innerHeight - 8);
+    box.left = Math.min(Math.max(0, box.left), window.innerWidth - box.width);
+    box.top = Math.min(Math.max(0, box.top), window.innerHeight - box.height);
+    return box;
+}
+
+/** True on phones / narrow screens / touch — floating is forced off there so
+ *  the panel uses the full-screen mobile layout instead. */
 function isMobileLayout() {
     return window.matchMedia('(max-width: 1000px), (pointer: coarse)').matches;
 }
 
-/** Apply the modal/dock mode to the DOM and body. */
+/** Push the floating box onto the panel as inline styles. */
+function applyFloatBox() {
+    const panel = state.dom.panel;
+    if (!panel || !state.floatBox) return;
+    const b = state.floatBox;
+    panel.style.left = `${b.left}px`;
+    panel.style.top = `${b.top}px`;
+    panel.style.width = `${b.width}px`;
+    panel.style.height = `${b.height}px`;
+}
+
+/** Clear inline floating styles (back to centered modal). */
+function clearFloatBox() {
+    const panel = state.dom.panel;
+    if (!panel) return;
+    panel.style.left = panel.style.top = panel.style.width = panel.style.height = '';
+}
+
+/** Apply the modal/floating mode to the DOM. */
 function applyMode() {
     const modal = state.dom.modal;
     if (!modal) return;
-    // Never use dock mode on mobile — it conflicts with the full-screen layout.
-    const isDock = state.mode === 'dock' && !isMobileLayout();
-    modal.classList.toggle('im_dock', isDock);
-    document.body.classList.toggle('im_dock_open', isDock && state.isOpen);
-    // The modal scroll-lock only makes sense for the windowed mode.
-    document.body.classList.toggle('im_modal_open', !isDock && state.isOpen);
-    if (state.dom.dockLabel) {
-        state.dom.dockLabel.textContent = isDock ? 'Window' : 'Dock';
+    // Floating is desktop-only; on mobile always use the full-screen layout.
+    const isFloating = state.mode === 'floating' && !isMobileLayout();
+    modal.classList.toggle('im_floating', isFloating);
+    // Scroll-lock the page only for the centered (non-floating) modal.
+    document.body.classList.toggle('im_modal_open', !isFloating && state.isOpen);
+
+    if (isFloating) {
+        if (!state.floatBox) state.floatBox = loadFloatBox() || defaultFloatBox();
+        clampFloatBox(state.floatBox);
+        applyFloatBox();
+    } else {
+        clearFloatBox();
     }
-    if (state.dom.dockToggle) {
-        state.dom.dockToggle.title = isDock
-            ? 'Restore as a floating window'
-            : 'Dock as a side panel next to the chat';
+
+    if (state.dom.floatLabel) {
+        state.dom.floatLabel.textContent = isFloating ? 'Center' : 'Float';
     }
+}
+
+/* ---------- Drag & resize for the floating window ---------- */
+function initFloatingInteractions() {
+    const header = state.dom.header;
+    const handle = state.dom.resizeHandle;
+
+    const pointXY = (e) => (e.touches && e.touches[0])
+        ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
+        : { x: e.clientX, y: e.clientY };
+
+    // --- DRAG (header) ---
+    const startDrag = (e) => {
+        if (state.mode !== 'floating' || isMobileLayout()) return;
+        if (e.target.closest('button')) return; // don't drag when tapping buttons
+        if (!state.floatBox) return;
+        const p = pointXY(e);
+        const start = { x: p.x, y: p.y, left: state.floatBox.left, top: state.floatBox.top };
+        state.dom.modal.classList.add('im_dragging');
+
+        const move = (ev) => {
+            const m = pointXY(ev);
+            state.floatBox.left = start.left + (m.x - start.x);
+            state.floatBox.top = start.top + (m.y - start.y);
+            clampFloatBox(state.floatBox);
+            applyFloatBox();
+            ev.preventDefault();
+        };
+        const end = () => {
+            state.dom.modal.classList.remove('im_dragging');
+            document.removeEventListener('mousemove', move);
+            document.removeEventListener('mouseup', end);
+            document.removeEventListener('touchmove', move);
+            document.removeEventListener('touchend', end);
+            saveFloatBox(state.floatBox);
+        };
+        document.addEventListener('mousemove', move);
+        document.addEventListener('mouseup', end);
+        document.addEventListener('touchmove', move, { passive: false });
+        document.addEventListener('touchend', end);
+        e.preventDefault();
+    };
+    header?.addEventListener('mousedown', startDrag);
+    header?.addEventListener('touchstart', startDrag, { passive: false });
+
+    // --- RESIZE (corner handle) ---
+    const startResize = (e) => {
+        if (state.mode !== 'floating' || isMobileLayout() || !state.floatBox) return;
+        const p = pointXY(e);
+        const start = { x: p.x, y: p.y, w: state.floatBox.width, h: state.floatBox.height };
+        state.dom.modal.classList.add('im_dragging');
+
+        const move = (ev) => {
+            const m = pointXY(ev);
+            state.floatBox.width = start.w + (m.x - start.x);
+            state.floatBox.height = start.h + (m.y - start.y);
+            clampFloatBox(state.floatBox);
+            applyFloatBox();
+            ev.preventDefault();
+        };
+        const end = () => {
+            state.dom.modal.classList.remove('im_dragging');
+            document.removeEventListener('mousemove', move);
+            document.removeEventListener('mouseup', end);
+            document.removeEventListener('touchmove', move);
+            document.removeEventListener('touchend', end);
+            saveFloatBox(state.floatBox);
+        };
+        document.addEventListener('mousemove', move);
+        document.addEventListener('mouseup', end);
+        document.addEventListener('touchmove', move, { passive: false });
+        document.addEventListener('touchend', end);
+        e.preventDefault();
+        e.stopPropagation();
+    };
+    handle?.addEventListener('mousedown', startResize);
+    handle?.addEventListener('touchstart', startResize, { passive: false });
 }
 
 /* ============================================================
@@ -301,6 +435,20 @@ function queueVisibleSizes() {
             state.sizeQueue.push(img.path);
         }
     }
+    // Also measure the whole current view so the total MB in the summary is
+    // complete (visible page is prioritised because it's queued first).
+    queueFolderSizes();
+    runSizeQueue();
+}
+
+/** Enqueue size lookups for EVERY image in the current folder/search view, so
+ *  the summary can show the real total size (in MB). Throttled by runSizeQueue. */
+function queueFolderSizes() {
+    for (const img of getFilteredImages()) {
+        if (!state.sizeCache.has(img.path) && !state.sizeQueue.includes(img.path)) {
+            state.sizeQueue.push(img.path);
+        }
+    }
     runSizeQueue();
 }
 
@@ -308,6 +456,7 @@ async function runSizeQueue() {
     if (state.sizeRunning) return;
     state.sizeRunning = true;
     const CONCURRENCY = 4;
+    let sinceRefresh = 0;
 
     const worker = async () => {
         while (state.sizeQueue.length) {
@@ -317,6 +466,12 @@ async function runSizeQueue() {
             const size = await fetchSize(img.url);
             state.sizeCache.set(path, size);
             updateCardSize(path, size);
+            // Periodically refresh the running total so the MB figure ticks up.
+            if (++sinceRefresh >= 8) {
+                sinceRefresh = 0;
+                renderPageControls();
+                updateStorageSummary();
+            }
         }
     };
 
@@ -325,6 +480,7 @@ async function runSizeQueue() {
     await Promise.all(workers);
 
     state.sizeRunning = false;
+    renderPageControls();
     updateStorageSummary();
 }
 
@@ -616,7 +772,20 @@ function renderPageControls() {
         state.dom.pageTotal.textContent = total > 0 ? `/ ${pages}` : '';
     }
     if (state.dom.summary) {
-        state.dom.summary.textContent = `${total} image${total === 1 ? '' : 's'}`;
+        // Count + total size of the CURRENT view (folder/search). The size is
+        // filled in lazily in the background, so it grows as scanning proceeds.
+        let known = 0, counted = 0;
+        const list = getFilteredImages();
+        for (const img of list) {
+            const s = state.sizeCache.get(img.path);
+            if (s != null) { known += s; counted++; }
+        }
+        let txt = `${total} image${total === 1 ? '' : 's'}`;
+        if (counted > 0) {
+            const scanning = counted < total;
+            txt += ` · ${scanning ? '~' : ''}${humanSize(known)}${scanning ? '…' : ''}`;
+        }
+        state.dom.summary.textContent = txt;
     }
     if (state.dom.prevPage) state.dom.prevPage.disabled = state.currentPage <= 1;
     if (state.dom.nextPage) state.dom.nextPage.disabled = state.currentPage >= pages;
@@ -824,184 +993,6 @@ function removeImageFromState(path) {
     }
 }
 
-/**
- * Clean Old: delete images older than a chosen number of days.
- * The /list API returns files date-sorted, so "oldest first" gives us the
- * order; but we don't have exact mtimes. To stay accurate we measure age
- * from the filename when it carries a timestamp (ST names inline images as
- * `<timestamp>_...` / `<Date.now()>.<ext>`), falling back to list order.
- */
-async function cleanOld() {
-    const c = ctx();
-
-    const form = document.createElement('div');
-    form.className = 'im_clean_form';
-    form.innerHTML = `
-        <p>Delete images older than:</p>
-        <div class="im_clean_row">
-            <input id="im_clean_days" type="number" min="1" value="30" class="text_pole">
-            <span>days</span>
-        </div>
-        <label class="im_toggle">
-            <input id="im_clean_scope" type="checkbox" ${state.activeFolder !== ALL_FOLDERS ? 'checked' : ''}>
-            <span>Only the current folder${state.activeFolder !== ALL_FOLDERS ? ` (${state.activeFolder === ROOT_FOLDER ? '(root)' : escapeHtml(state.activeFolder)})` : ''}</span>
-        </label>
-        <p class="im_clean_note"><i class="fa-solid fa-circle-info"></i> Age is read from the image's timestamp when available, otherwise from server file order.</p>
-    `;
-
-    // Use the Popup class directly because Popup.show.confirm only accepts
-    // string content, while we need to embed a DOM form to read inputs from.
-    const wrap = document.createElement('div');
-    const heading = document.createElement('h3');
-    heading.textContent = 'Clean old images';
-    wrap.appendChild(heading);
-    wrap.appendChild(form);
-
-    const popup = new c.Popup(wrap, c.POPUP_TYPE.CONFIRM, '', {
-        okButton: 'Find matches',
-        cancelButton: 'Cancel',
-    });
-    const result = await popup.show();
-    if (result !== c.POPUP_RESULT.AFFIRMATIVE) return;
-
-    const days = Math.max(1, Number(form.querySelector('#im_clean_days')?.value) || 30);
-    const onlyCurrent = form.querySelector('#im_clean_scope')?.checked;
-    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-
-    let pool = state.images.slice();
-    if (onlyCurrent && state.activeFolder !== ALL_FOLDERS) {
-        pool = pool.filter(i => i.folder === state.activeFolder);
-    }
-
-    const matches = pool.filter((img) => {
-        const ts = extractTimestamp(img.file);
-        if (ts != null) return ts < cutoff;
-        return false; // unknown age -> skip to be safe
-    });
-
-    if (matches.length === 0) {
-        toastr.info('No images older than that were found (with a readable date).');
-        return;
-    }
-
-    // Show a preview popup with a thumbnail for every match. Each one is
-    // checked by default; the user can untick anything they want to keep.
-    const selectedToDelete = await cleanOldPreview(matches, days);
-    if (!selectedToDelete || selectedToDelete.length === 0) {
-        if (selectedToDelete && selectedToDelete.length === 0) {
-            toastr.info('Nothing selected — no images deleted.');
-        }
-        return;
-    }
-
-    let success = 0;
-    let failed = 0;
-    toastr.info(`Cleaning ${selectedToDelete.length} image(s)...`);
-    for (const img of selectedToDelete) {
-        const ok = await apiDeleteImage(img.path);
-        if (ok) { removeImageFromState(img.path); success++; }
-        else failed++;
-    }
-    render();
-    queueVisibleSizes();
-    if (failed) toastr.warning(`Cleaned ${success}, failed ${failed}.`);
-    else toastr.success(`Cleaned ${success} image(s).`);
-}
-
-/**
- * Renders a confirmation popup that previews every image that will be deleted.
- * Thumbnails are shown with a checkbox each (checked = will delete). The user
- * can untick images to keep them. Returns the array of images to actually
- * delete, or null if the user cancelled.
- *
- * NOTE: This never touches file names or paths — it only reads img.url for the
- * preview and img.path for deletion, exactly as the rest of the manager does.
- *
- * @param {Array} matches Images matched by the age filter
- * @param {number} days Age threshold (for the header)
- * @returns {Promise<Array|null>}
- */
-async function cleanOldPreview(matches, days) {
-    const c = ctx();
-
-    const wrap = document.createElement('div');
-    wrap.className = 'im_clean_preview';
-
-    const head = document.createElement('div');
-    head.className = 'im_clean_preview_head';
-    head.innerHTML = `
-        <h3><i class="fa-solid fa-broom"></i> Delete old images</h3>
-        <p>Found <b>${matches.length}</b> image(s) older than <b>${days}</b> day(s).
-        Untick anything you want to keep. <b>This cannot be undone.</b></p>
-        <div class="im_clean_preview_bar">
-            <button type="button" class="menu_button interactable" data-clean="all"><i class="fa-solid fa-check-double"></i> Select all</button>
-            <button type="button" class="menu_button interactable" data-clean="none"><i class="fa-solid fa-xmark"></i> Deselect all</button>
-            <span class="im_clean_preview_count"></span>
-        </div>
-    `;
-    wrap.appendChild(head);
-
-    const grid = document.createElement('div');
-    grid.className = 'im_clean_preview_grid';
-    grid.innerHTML = matches.map((img, i) => {
-        const media = img.isVideo
-            ? `<video class="im_clean_thumb_media" src="${escapeHtml(img.url)}" preload="metadata" muted></video>`
-            : `<img class="im_clean_thumb_media" src="${escapeHtml(img.url)}" loading="lazy" alt="">`;
-        return `<label class="im_clean_thumb" data-index="${i}">
-            <input type="checkbox" checked>
-            <span class="im_clean_thumb_frame">
-                ${media}
-                ${img.isVideo ? '<span class="im_card_badge"><i class="fa-solid fa-film"></i></span>' : ''}
-            </span>
-            <span class="im_clean_thumb_name" title="${escapeHtml(img.file)}">${escapeHtml(img.file)}</span>
-        </label>`;
-    }).join('');
-    wrap.appendChild(grid);
-
-    const updateCount = () => {
-        const checked = grid.querySelectorAll('input[type="checkbox"]:checked').length;
-        const countEl = head.querySelector('.im_clean_preview_count');
-        if (countEl) countEl.textContent = `${checked} of ${matches.length} will be deleted`;
-    };
-
-    grid.addEventListener('change', (e) => {
-        if (e.target instanceof HTMLInputElement) {
-            e.target.closest('.im_clean_thumb')?.classList.toggle('is-unchecked', !e.target.checked);
-            updateCount();
-        }
-    });
-
-    head.addEventListener('click', (e) => {
-        const btn = e.target instanceof Element ? e.target.closest('[data-clean]') : null;
-        if (!btn) return;
-        const on = btn.dataset.clean === 'all';
-        grid.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
-            cb.checked = on;
-            cb.closest('.im_clean_thumb')?.classList.toggle('is-unchecked', !on);
-        });
-        updateCount();
-    });
-
-    updateCount();
-
-    const popup = new c.Popup(wrap, c.POPUP_TYPE.CONFIRM, '', {
-        okButton: 'Delete checked',
-        cancelButton: 'Cancel',
-        wide: true,
-        large: true,
-        allowVerticalScrolling: true,
-    });
-    const result = await popup.show();
-    if (result !== c.POPUP_RESULT.AFFIRMATIVE) return null;
-
-    const keep = [];
-    grid.querySelectorAll('.im_clean_thumb').forEach((el) => {
-        const idx = Number(el.dataset.index);
-        const cb = el.querySelector('input[type="checkbox"]');
-        if (cb && cb.checked && matches[idx]) keep.push(matches[idx]);
-    });
-    return keep;
-}
 
 /**
  * Try to pull a millisecond timestamp out of an ST image filename.
@@ -1032,7 +1023,7 @@ function openManager() {
 
     state.dom.modal.classList.remove('im_hidden');
     state.isOpen = true;
-    applyMode();   // sets the correct body classes for modal vs dock
+    applyMode();   // centered modal vs floating window
     updateSidebarLabel();
     loadAll();
 }
@@ -1042,7 +1033,6 @@ function closeManager() {
     state.dom.modal.classList.add('im_hidden');
     state.isOpen = false;
     document.body.classList.remove('im_modal_open');
-    document.body.classList.remove('im_dock_open');
     state.selected.clear();
 }
 
@@ -1064,6 +1054,9 @@ async function injectUI() {
     const $ = (id) => document.getElementById(id);
     state.dom = {
         modal: $('im_modal'),
+        panel: document.querySelector('#im_modal .im_panel'),
+        header: document.querySelector('#im_modal .im_header'),
+        resizeHandle: $('im_resize_handle'),
         loading: $('im_loading'),
         empty: $('im_empty'),
         grid: $('im_grid'),
@@ -1082,10 +1075,9 @@ async function injectUI() {
         sort: $('im_sort'),
         pageSize: $('im_page_size'),
         showHidden: $('im_show_hidden'),
-        cleanOld: $('im_clean_old'),
         refresh: $('im_refresh'),
-        dockToggle: $('im_dock_toggle'),
-        dockLabel: document.querySelector('#im_dock_toggle .im_dock_label'),
+        floatToggle: $('im_float_toggle'),
+        floatLabel: document.querySelector('#im_float_toggle .im_float_label'),
         selectBar: $('im_select_bar'),
         selectCount: $('im_select_count'),
         selectSize: $('im_select_size'),
@@ -1149,14 +1141,13 @@ function bindEvents() {
         queueVisibleSizes();
     });
 
-    d.cleanOld?.addEventListener('click', cleanOld);
-
-    // Dock / window mode toggle.
-    d.dockToggle?.addEventListener('click', () => {
-        state.mode = state.mode === 'dock' ? 'modal' : 'dock';
+    // Floating / centered window toggle.
+    d.floatToggle?.addEventListener('click', () => {
+        state.mode = state.mode === 'floating' ? 'modal' : 'floating';
         saveMode(state.mode);
         applyMode();
     });
+    initFloatingInteractions();
 
     // Pagination: previous / next page buttons + jump-to-page picker.
     d.prevPage?.addEventListener('click', () => goToPage(state.currentPage - 1));
@@ -1174,10 +1165,10 @@ function bindEvents() {
         d.sidebar?.classList.toggle('is-collapsed');
     });
 
-    // ESC closes — only in windowed mode. In dock mode the panel is meant to
-    // stay open alongside the chat, so ESC should not dismiss it.
+    // ESC closes — only for the centered modal. A floating window is meant to
+    // sit alongside the chat, so ESC should not dismiss it.
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && state.isOpen && state.mode !== 'dock') closeManager();
+        if (e.key === 'Escape' && state.isOpen && state.mode !== 'floating') closeManager();
     });
 }
 

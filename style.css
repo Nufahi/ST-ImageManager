@@ -101,14 +101,14 @@ body.im_modal_open {
     display: none;
 }
 
-/* Dock toggle keeps its label on wide screens only. */
+/* Float toggle keeps its label on wide screens only. */
 @media (min-width: 1001px) {
-    #im_dock_toggle.im_icon_only {
+    #im_float_toggle.im_icon_only {
         width: auto;
         padding: 0 8px;
         gap: 5px;
     }
-    #im_dock_toggle.im_icon_only span {
+    #im_float_toggle.im_icon_only span {
         display: inline;
     }
 }
@@ -574,167 +574,63 @@ body.im_modal_open {
     text-align: center;
 }
 
-/* ---------- Clean-old form ---------- */
-.im_clean_form {
-    text-align: left;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.im_clean_row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.im_clean_row input {
-    width: 90px;
-}
-
-.im_clean_note {
-    font-size: 0.78rem;
-    opacity: 0.65;
-    margin: 0;
-}
-
-/* ---------- Clean-old PREVIEW popup ---------- */
-.im_clean_preview {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    text-align: left;
-    max-height: 70vh;
-}
-
-.im_clean_preview_head h3 {
-    margin: 0 0 4px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.im_clean_preview_head p {
-    margin: 0 0 8px;
-    font-size: 0.85rem;
-    opacity: 0.8;
-}
-
-.im_clean_preview_bar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
-.im_clean_preview_count {
-    font-size: 0.82rem;
-    opacity: 0.75;
-    margin-left: auto;
-}
-
-.im_clean_preview_grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-    gap: 10px;
-    overflow-y: auto;
-    padding: 4px;
-    flex: 1;
-    min-height: 0;
-}
-
-.im_clean_thumb {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    cursor: pointer;
-    border-radius: 8px;
-    transition: opacity 0.15s;
-}
-
-.im_clean_thumb.is-unchecked {
-    opacity: 0.4;
-}
-
-.im_clean_thumb > input[type="checkbox"] {
-    position: absolute;
-    top: 6px;
-    left: 6px;
-    z-index: 2;
-    width: 18px;
-    height: 18px;
-    margin: 0;
-    cursor: pointer;
-}
-
-.im_clean_thumb_frame {
-    position: relative;
-    aspect-ratio: 1 / 1;
-    background: rgba(0, 0, 0, 0.25);
-    border-radius: 8px;
-    overflow: hidden;
-    border: 2px solid var(--SmartThemeQuoteColor, #6a9cff);
-}
-
-.im_clean_thumb.is-unchecked .im_clean_thumb_frame {
-    border-color: transparent;
-}
-
-.im_clean_thumb_media {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-}
-
-.im_clean_thumb_name {
-    font-size: 0.68rem;
-    opacity: 0.75;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-@media (max-width: 768px) {
-    .im_clean_preview_grid {
-        grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
-    }
-}
 
 /* ============================================================
- * DOCK MODE — pinned side panel that sits next to the chat
- * (desktop only; on narrow screens it falls back to full screen)
+ * FLOATING MODE — a movable, resizable window (like CSS Editor Pro).
+ * The modal layer lets clicks pass through everywhere except the panel, so the
+ * chat behind it stays fully usable. The panel position/size are controlled by
+ * JS (inline left/top/width/height) and persisted.
  * ============================================================ */
-.im_modal.im_dock {
-    /* Become a right-edge column instead of a centered overlay. */
-    inset: 0 0 0 auto;
-    width: var(--im-dock-width, 420px);
-    max-width: 90vw;
-    padding: 0;
+.im_modal.im_floating {
+    pointer-events: none;       /* clicks pass through the empty area to the chat */
+}
+
+.im_modal.im_floating .im_backdrop {
+    display: none;              /* no dimming — chat behind stays visible/usable */
+}
+
+.im_modal.im_floating .im_panel {
+    pointer-events: auto;       /* the window itself is interactive */
+    position: fixed;
+    /* left/top/width/height are set inline by JS; sane fallbacks here. */
+    width: var(--im-float-w, 460px);
+    height: var(--im-float-h, 640px);
+    max-width: 96vw;
+    max-height: 92vh;
+    margin: 0;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+}
+
+/* The header is the drag handle. */
+.im_modal.im_floating .im_header {
+    cursor: move;
+    touch-action: none;        /* let JS handle the drag gesture on touch */
+    user-select: none;
+}
+
+.im_modal.im_floating.im_dragging .im_panel {
+    transition: none;
+    will-change: left, top;
+}
+
+/* Resize grip in the bottom-right corner. */
+.im_resize_handle {
+    display: none;
+}
+
+.im_modal.im_floating .im_resize_handle {
     display: block;
-    pointer-events: none; /* let the backdrop area pass clicks to the chat */
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 18px;
+    height: 18px;
+    cursor: nwse-resize;
+    touch-action: none;
+    z-index: 5;
+    background:
+        linear-gradient(135deg, transparent 0 50%, var(--SmartThemeBorderColor, rgba(255,255,255,0.4)) 50% 60%, transparent 60% 70%, var(--SmartThemeBorderColor, rgba(255,255,255,0.4)) 70% 80%, transparent 80%);
 }
-
-.im_modal.im_dock .im_backdrop {
-    display: none; /* no dimming in dock mode — chat stays usable */
-}
-
-.im_modal.im_dock .im_panel {
-    pointer-events: auto;
-    width: 100%;
-    height: 100%;
-    max-height: 100%;
-    border-radius: 0;
-    border: none;
-    border-left: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.15));
-    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.45);
-}
-
-/* The dock simply floats over the right edge — it does NOT resize or shift the
- * chat (#sheld). Forcing the chat's width/margin made it jump and stick to the
- * panel border, so we leave the chat layout untouched and let the dock overlay
- * it. The panel keeps pointer events on itself; the rest passes through. */
 
 /* ============================================================
  * RESPONSIVE — tablets & phones / any touch device
@@ -748,9 +644,10 @@ body.im_modal_open {
     /* Full-screen overlay. Anchor the panel to the TOP (not centered) so the
        header and the Close button are always reachable and nothing gets cut
        off the bottom of the screen. */
-    /* Modal stays a plain fixed full-screen container (same as lorebook). */
+    /* Modal stays a plain fixed full-screen container (same as lorebook).
+       Floating mode is disabled on phones — always full-screen. */
     .im_modal,
-    .im_modal.im_dock {
+    .im_modal.im_floating {
         position: fixed;
         inset: 0;
         width: 100vw;
@@ -758,20 +655,35 @@ body.im_modal_open {
         pointer-events: auto;
     }
 
-    /* Panel is a normal in-flow block that fills below ST's top bar — NOT
-       position:fixed/absolute. This is the proven lorebook-manager layout
-       that renders full-screen and upright on phones. */
+    .im_modal.im_floating .im_backdrop {
+        display: block;        /* restore the normal backdrop on phones */
+    }
+
+    /* Panel fills below ST's top bar (lorebook layout). !important defeats any
+       leftover inline left/top/width/height from a previous floating session. */
     .im_panel,
-    .im_modal.im_dock .im_panel {
-        position: relative;
-        width: 100vw;
-        height: calc(100vh - var(--topBarBlockSize, 0px));
-        height: calc(100dvh - var(--topBarBlockSize, 0px));
-        margin: var(--topBarBlockSize, 0px) 0 0;
+    .im_modal.im_floating .im_panel {
+        position: relative !important;
+        left: auto !important;
+        top: auto !important;
+        width: 100vw !important;
+        height: calc(100vh - var(--topBarBlockSize, 0px)) !important;
+        height: calc(100dvh - var(--topBarBlockSize, 0px)) !important;
+        max-width: 100vw !important;
+        max-height: none !important;
+        margin: var(--topBarBlockSize, 0px) 0 0 !important;
         padding: 0;
         border-radius: 0;
         border: none;
         box-shadow: none;
+    }
+
+    /* No drag handle / resize grip on phones. */
+    .im_modal.im_floating .im_header {
+        cursor: default;
+    }
+    .im_resize_handle {
+        display: none !important;
     }
 
     /* ---- Compact header: title + icon buttons on ONE line ---- */
@@ -795,8 +707,8 @@ body.im_modal_open {
         flex-wrap: nowrap;
     }
 
-    /* Dock makes no sense on phones — hide its button entirely. */
-    #im_dock_toggle {
+    /* Floating makes no sense on phones — hide its button entirely. */
+    #im_float_toggle {
         display: none;
     }
 
@@ -873,7 +785,17 @@ body.im_modal_open {
     /* ---- Main header compact ---- */
     .im_main_header {
         padding: 3px 8px;
-        gap: 6px;
+        gap: 4px 8px;
+        flex-wrap: wrap;       /* let the size summary sit on its own line */
+    }
+
+    /* Count + total MB — always readable on phones. */
+    #im_summary {
+        flex: 1 1 100%;
+        order: 3;
+        font-size: 0.74rem;
+        white-space: normal;
+        opacity: 0.85;
     }
 
     .im_page_controls .menu_button {
