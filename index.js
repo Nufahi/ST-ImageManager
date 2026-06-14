@@ -797,15 +797,21 @@ function renderFolders() {
     }).join('');
 
     list.querySelectorAll('.im_folder_item').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            state.activeFolder = btn.dataset.folder;
-            state.currentPage = 1;
-            updateSidebarLabel();
-            collapseSidebarOnMobile();
-            render();
-            queueVisibleSizes();
-        });
+        btn.addEventListener('click', () => selectFolder(btn.dataset.folder));
     });
+}
+
+/** Switch the active folder view and refresh everything. Shared by the sidebar
+ *  folder list and the clickable folder tag on each card. */
+function selectFolder(folderName) {
+    if (!folderName) return;
+    state.activeFolder = folderName;
+    state.currentPage = 1;
+    updateSidebarLabel();
+    collapseSidebarOnMobile();
+    render();
+    queueVisibleSizes();
+    if (state.dom.grid) state.dom.grid.scrollTop = 0;
 }
 
 function updateSidebarLabel() {
@@ -850,8 +856,10 @@ function cardHtml(img, hidden) {
     const media = img.isVideo
         ? `<video class="im_card_media" src="${escapeHtml(img.url)}" preload="metadata" muted></video>`
         : `<img class="im_card_media" src="${escapeHtml(img.url)}" loading="lazy" alt="">`;
+    // In the "All images" view each card shows which folder (= character) the
+    // image belongs to. The tag is clickable: it jumps the view to that folder.
     const folderTag = state.activeFolder === ALL_FOLDERS
-        ? `<span class="im_card_folder" title="${escapeHtml(img.folderLabel)}"><i class="fa-solid fa-folder"></i> ${escapeHtml(img.folderLabel)}</span>`
+        ? `<button type="button" class="im_card_folder" data-folder="${escapeHtml(img.folder)}" title="${escapeHtml(t('card.openFolder', { folder: img.folderLabel }))}"><i class="fa-solid fa-folder"></i> ${escapeHtml(img.folderLabel)}</button>`
         : '';
     return `<div class="im_card${selected}${isHidden}" data-path="${escapeHtml(img.path)}">
         <div class="im_card_thumb">
@@ -861,7 +869,6 @@ function cardHtml(img, hidden) {
             </label>
             ${img.isVideo ? '<span class="im_card_badge"><i class="fa-solid fa-film"></i></span>' : ''}
             <div class="im_card_actions">
-                <button type="button" class="im_card_btn" data-act="view" title="${escapeHtml(t('card.viewTitle'))}"><i class="fa-solid fa-expand"></i></button>
                 <button type="button" class="im_card_btn" data-act="hide" title="${escapeHtml(hidden.has(img.path) ? t('card.unhideTitle') : t('card.hideTitle'))}"><i class="fa-solid ${hidden.has(img.path) ? 'fa-eye' : 'fa-eye-slash'}"></i></button>
                 <button type="button" class="im_card_btn im_card_btn_danger" data-act="delete" title="${escapeHtml(t('card.deleteTitle'))}"><i class="fa-solid fa-trash-can"></i></button>
             </div>
@@ -913,10 +920,17 @@ function wireCard(card) {
             e.preventDefault();
             e.stopPropagation();
             const act = btn.dataset.act;
-            if (act === 'view') viewImage(img);
-            else if (act === 'hide') toggleHide(path);
+            if (act === 'hide') toggleHide(path);
             else if (act === 'delete') deleteOne(img);
         });
+    });
+
+    // Click the folder tag (shown in the "All images" view) to jump into that
+    // folder. This makes the previously-decorative label actually useful.
+    card.querySelector('.im_card_folder')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        selectFolder(e.currentTarget.dataset.folder);
     });
 }
 

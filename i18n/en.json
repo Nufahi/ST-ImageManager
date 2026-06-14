@@ -49,10 +49,10 @@
   "empty.none": "No images here. Nothing to clean!",
 
   "card.selectTitle": "Select",
-  "card.viewTitle": "View full size",
   "card.hideTitle": "Hide from manager",
   "card.unhideTitle": "Unhide",
   "card.deleteTitle": "Delete file",
+  "card.openFolder": "Open folder: {{folder}}",
 
   "breadcrumb.sharedHint": "SillyTavern keeps one image folder per character NAME. Different characters with the same name share this folder — that's a server limitation, not a bug. Tip: sort by Name or use search to group a single bot's files (they have different prefixes).",
 

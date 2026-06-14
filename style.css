@@ -576,12 +576,29 @@ body.im_modal_open {
 }
 
 .im_card_folder {
+    /* It's a <button> now (clickable), so strip the native button chrome. */
+    display: block;
+    width: 100%;
+    border: none;
+    background: none;
+    text-align: left;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
     padding: 0 8px 8px;
     font-size: 0.68rem;
     opacity: 0.55;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    transition: opacity 0.12s, color 0.12s;
+}
+
+.im_card_folder:hover,
+.im_card_folder:focus-visible {
+    opacity: 1;
+    color: var(--SmartThemeQuoteColor, #6a9cff);
+    text-decoration: underline;
 }
 
 /* ---------- Viewer popup ---------- */
@@ -637,6 +654,24 @@ body.im_modal_open {
     cursor: move;
     touch-action: none;        /* let JS handle the drag gesture on touch */
     user-select: none;
+}
+
+/* Inside the (narrow) floating window the desktop's fixed 200px columns would
+   leave only a single card per row. Switch to flexible columns that always fit
+   at least 2 and let cards shrink/grow with the window width. */
+.im_modal.im_floating #im_grid.im_grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(140px, 45%), 1fr));
+    justify-content: stretch;
+}
+
+.im_modal.im_floating #im_grid .im_card {
+    width: 100%;              /* fill the flexible grid column */
+}
+
+.im_modal.im_floating #im_grid .im_card_thumb {
+    height: auto;            /* follow the real (flexible) card width */
+    aspect-ratio: 2 / 3;
+    min-height: 0;
 }
 
 .im_modal.im_floating.im_dragging .im_panel {
@@ -932,22 +967,27 @@ body.im_modal_open {
         min-height: calc(144vw / var(--im-cols, 2));
     }
 
-    /* No hover on touch — always show the action buttons (overlaid). */
+    /* No hover on touch — always show the action buttons (overlaid). The
+       buttons scale DOWN as the column count grows so they don't cover the
+       whole thumbnail at 3-4 cards per row. */
     .im_card_actions {
         opacity: 1;
-        gap: 8px;
-        padding: 6px;
+        gap: calc(10px / var(--im-cols, 2));
+        padding: calc(10px / var(--im-cols, 2));
         justify-content: center;
+        flex-wrap: nowrap;
     }
 
     .im_card_btn {
-        width: 38px;
-        height: 38px;
+        /* ~38px at 2 cols, ~25px at 3, ~19px at 4 (with a tap-friendly floor). */
+        width: clamp(22px, calc(76px / var(--im-cols, 2)), 38px);
+        height: clamp(22px, calc(76px / var(--im-cols, 2)), 38px);
+        font-size: clamp(0.6rem, calc(1.8rem / var(--im-cols, 2)), 1rem);
     }
 
     .im_card_check input {
-        width: 22px;
-        height: 22px;
+        width: clamp(16px, calc(44px / var(--im-cols, 2)), 22px);
+        height: clamp(16px, calc(44px / var(--im-cols, 2)), 22px);
     }
 }
 
