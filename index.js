@@ -156,11 +156,18 @@ function applyZoom() {
     }
 }
 
+/** True on phones / narrow screens / touch — where dock mode makes no sense
+ *  and the panel should always be the full-screen layout. */
+function isMobileLayout() {
+    return window.matchMedia('(max-width: 1000px), (pointer: coarse)').matches;
+}
+
 /** Apply the modal/dock mode to the DOM and body. */
 function applyMode() {
     const modal = state.dom.modal;
     if (!modal) return;
-    const isDock = state.mode === 'dock';
+    // Never use dock mode on mobile — it conflicts with the full-screen layout.
+    const isDock = state.mode === 'dock' && !isMobileLayout();
     modal.classList.toggle('im_dock', isDock);
     document.body.classList.toggle('im_dock_open', isDock && state.isOpen);
     // The modal scroll-lock only makes sense for the windowed mode.
@@ -1187,6 +1194,8 @@ function addWandButton() {
     btn.id = 'im_wand_button';
     btn.classList.add('list-group-item', 'flex-container', 'flexGap5', 'interactable');
     btn.tabIndex = 0;
+    btn.setAttribute('role', 'button');
+    btn.style.cursor = 'pointer';
     btn.title = 'Open the Image Manager to browse and clean stored images';
 
     const icon = document.createElement('div');
@@ -1196,11 +1205,30 @@ function addWandButton() {
 
     btn.appendChild(icon);
     btn.appendChild(text);
-    btn.addEventListener('click', () => {
-        // Close the wand dropdown if open
-        document.getElementById('extensionsMenu')?.classList.remove('open');
+
+    // Guard against the handler firing twice (touch devices can fire both a
+    // pointerup/touchend AND a synthetic click for the same tap).
+    let lastFire = 0;
+    const activate = (e) => {
+        // Don't let the tap bubble up to ST's menu handlers, which on mobile
+        // close the wand menu in a way that can swallow our click entirely.
+        e.preventDefault();
+        e.stopPropagation();
+
+        const now = Date.now();
+        if (now - lastFire < 400) return; // debounce double-fire
+        lastFire = now;
+
+        // Open FIRST, then close the dropdown — closing it before opening can
+        // cancel the in-flight tap on some mobile webviews.
         openManager();
-    });
+        document.getElementById('extensionsMenu')?.classList.remove('open');
+    };
+
+    // pointerup covers mouse + modern touch; touchend is a fallback for older
+    // mobile webviews where the synthetic click never reaches a <div>.
+    btn.addEventListener('click', activate);
+    btn.addEventListener('touchend', activate, { passive: false });
 
     container.appendChild(btn);
     return true;

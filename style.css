@@ -11,14 +11,14 @@ body.im_modal_open {
 }
 
 /* ---------- Modal shell ---------- */
+/* Same model as My-lorebook-manager: the modal is just a fixed full-screen
+   container; the panel is a normal block centered with margin:auto. No flex
+   centering on the modal — that's what caused the off-center/half-screen
+   layout on mobile. */
 .im_modal {
     position: fixed;
     inset: 0;
     z-index: 10000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 2vmin;
 }
 
 .im_backdrop {
@@ -33,7 +33,8 @@ body.im_modal_open {
     display: flex;
     flex-direction: column;
     width: min(1400px, calc(100vw - 24px));
-    height: min(960px, calc(100vh - var(--topBarBlockSize, 0px) - 20px));
+    height: min(960px, calc(100vh - var(--topBarBlockSize, 0px) - 24px));
+    margin: calc(var(--topBarBlockSize, 0px) + 8px) auto 16px;
     background: var(--SmartThemeBlurTintColor, var(--SmartThemeBotMesBlurTintColor, #1a1a1a));
     color: var(--SmartThemeBodyColor, #e0e0e0);
     border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.1));
@@ -358,12 +359,18 @@ body.im_modal_open {
 
 .im_card_thumb {
     position: relative;
+    /* Width MUST be explicit: .im_card is a flex column, and without a
+       resolved width the aspect-ratio box collapses to a thin strip before
+       the image loads (the "rows of stripes" bug). */
+    width: 100%;
     aspect-ratio: 1 / 1;
     background: rgba(0, 0, 0, 0.25);
     overflow: hidden;
 }
 
 .im_card_media {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
@@ -673,34 +680,30 @@ body.im_modal_open {
     /* Full-screen overlay. Anchor the panel to the TOP (not centered) so the
        header and the Close button are always reachable and nothing gets cut
        off the bottom of the screen. */
+    /* Modal stays a plain fixed full-screen container (same as lorebook). */
     .im_modal,
     .im_modal.im_dock {
+        position: fixed;
         inset: 0;
         width: 100vw;
         max-width: 100vw;
-        height: 100%;
-        padding: 0;
-        display: block;       /* no flex centering on mobile */
-        align-items: stretch;
-        justify-content: stretch;
         pointer-events: auto;
     }
 
+    /* Panel is a normal in-flow block that fills below ST's top bar — NOT
+       position:fixed/absolute. This is the proven lorebook-manager layout
+       that renders full-screen and upright on phones. */
     .im_panel,
     .im_modal.im_dock .im_panel {
-        position: fixed;
-        top: var(--topBarBlockSize, 0px);
-        left: 0;
-        right: 0;
-        bottom: 0;
-        width: 100%;
-        height: auto;          /* fill from top to bottom precisely */
-        max-height: none;
-        margin: 0;
+        position: relative;
+        width: 100vw;
+        height: calc(100vh - var(--topBarBlockSize, 0px));
+        height: calc(100dvh - var(--topBarBlockSize, 0px));
+        margin: var(--topBarBlockSize, 0px) 0 0;
+        padding: 0;
         border-radius: 0;
         border: none;
         box-shadow: none;
-        z-index: 10001;        /* above the backdrop, always tappable */
     }
 
     body.im_dock_open #sheld {
