@@ -28,6 +28,7 @@
   "toolbar.sort.az": "A-Z",
   "toolbar.sort.za": "Z-A",
   "toolbar.pageSizeTitle": "Images per page",
+  "toolbar.colsTitle": "Cards per row (tap to change: 2 / 3 / 4)",
   "toolbar.selectAllTitle": "Select ALL images in the current view (every page)",
   "toolbar.showHiddenTitle": "Show ONLY hidden images (toggle off to return to normal images)",
 

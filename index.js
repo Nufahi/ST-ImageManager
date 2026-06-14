@@ -131,6 +131,12 @@ const VIDEO_EXTENSIONS = ['mp4', 'webm', 'ogv', 'mov', 'mkv'];
 // localStorage keys for device-local UI preferences.
 const LS_MODE = 'imageManager.mode';     // 'modal' | 'floating'
 const LS_FLOAT = 'imageManager.floatBox'; // { left, top, width, height }
+const LS_COLS = 'imageManager.cols';     // mobile cards-per-row (2..4)
+
+// How many cards per row the mobile grid can show. The user cycles through
+// these with the columns button; cards shrink to fit the chosen count.
+const COLS_OPTIONS = Object.freeze([2, 3, 4]);
+const DEFAULT_COLS = 2;
 
 const DEFAULT_SETTINGS = Object.freeze({
     sort: 'date-desc',
@@ -163,6 +169,7 @@ const state = {
     sizeRunning: false,
     mode: 'modal',      // 'modal' (centered) | 'floating' (movable window)
     floatBox: null,     // { left, top, width, height } when floating
+    cols: DEFAULT_COLS, // mobile cards-per-row (2..4)
 };
 
 /* ============================================================
@@ -236,6 +243,34 @@ function loadMode() {
 
 function saveMode(value) {
     localStorage.setItem(LS_MODE, value === 'floating' ? 'floating' : 'modal');
+}
+
+function loadCols() {
+    const raw = Number(localStorage.getItem(LS_COLS));
+    return COLS_OPTIONS.includes(raw) ? raw : DEFAULT_COLS;
+}
+
+function saveCols(value) {
+    const v = COLS_OPTIONS.includes(Number(value)) ? Number(value) : DEFAULT_COLS;
+    localStorage.setItem(LS_COLS, String(v));
+}
+
+/** Push the chosen cards-per-row count onto the grid as a CSS variable.
+ *  The CSS only honours it on the mobile layout (where columns are flexible);
+ *  on desktop the grid auto-fills fixed-width cards, so this is a no-op there. */
+function applyCols() {
+    const grid = state.dom.grid;
+    if (grid) grid.style.setProperty('--im-cols', String(state.cols));
+    // Reflect the current count in the toolbar button label, if present.
+    if (state.dom.colsLabel) state.dom.colsLabel.textContent = String(state.cols);
+}
+
+/** Cycle to the next cards-per-row option (2 -> 3 -> 4 -> 2). */
+function cycleCols() {
+    const idx = COLS_OPTIONS.indexOf(state.cols);
+    state.cols = COLS_OPTIONS[(idx + 1) % COLS_OPTIONS.length];
+    saveCols(state.cols);
+    applyCols();
 }
 
 function loadFloatBox() {
@@ -623,6 +658,26 @@ function cssEscape(str) {
 /* ============================================================
  * FILTERING / SORTING / PAGING
  * ============================================================ */
+/**
+ * A single comparable "age" key for date sorting, where a BIGGER value means
+ * NEWER. This unifies dated and undated files onto one scale so the order is
+ * consistent (and direction-aware) in the mixed "All images" view.
+ *
+ *  - Files with a real timestamp in their name use it directly (ms since
+ *    epoch — always > 0 for sane dates).
+ *  - Files WITHOUT a timestamp can't be dated, so they all sort as "older than
+ *    everything dated" by getting a negative key. Within that group they keep
+ *    a stable order derived from the global sequence (the API lists each
+ *    folder newest-first, so a smaller seq means newer → negate it so newer
+ *    still maps to a bigger key).
+ */
+function dateSortKey(img) {
+    if (img.mtime != null) return img.mtime;
+    // Undated: park below any real timestamp (negative), newer-first within the
+    // group. -1 offset guarantees the key stays strictly negative.
+    return -1 - img.seq;
+}
+
 function getFilteredImages() {
     const hidden = getHiddenSet();
     const search = state.search.trim().toLowerCase();
@@ -644,23 +699,15 @@ function getFilteredImages() {
         if (field === 'name') {
             return a.file.localeCompare(b.file, undefined, { numeric: true }) * dir;
         }
-        // Date sort. Prefer the real timestamp baked into the file name. Files
-        // with a known timestamp always sort by it; files without one keep the
-        // API's per-folder order (which is already newest-first) and are placed
-        // after the dated ones for "newest".
-        const ta = a.mtime;
-        const tb = b.mtime;
-        if (ta != null && tb != null) return (ta - tb) * dir;
-        // Files with a known date always sort ahead of undated ones, in BOTH
-        // directions (undated age is unknown, so park it at the end).
-        if (ta != null) return -1;
-        if (tb != null) return 1;
-        // Neither has a timestamp: fall back to a stable, sensible order.
-        // The API lists each folder newest-first, so a SMALLER folderOrder/seq
-        // means NEWER. To stay consistent with the timestamp branch above
-        // (where a bigger ts = newer), treat "newer" as the larger sort key by
-        // negating the order index. Then `* dir` makes Newest/Oldest correct.
-        if (a.folder === b.folder) return (b.folderOrder - a.folderOrder) * dir;
+        // Date sort. Every image gets a single comparable numeric "age" key so
+        // the order is consistent and direction-aware even in the "All images"
+        // view where dated and undated files from different folders are mixed.
+        // A BIGGER key always means NEWER, so `* dir` cleanly flips
+        // Newest/Oldest for the whole list at once.
+        const ka = dateSortKey(a);
+        const kb = dateSortKey(b);
+        if (ka !== kb) return (ka - kb) * dir;
+        // Exact tie (e.g. two undated files): keep a deterministic order.
         return (b.seq - a.seq) * dir;
     });
 
@@ -1190,6 +1237,7 @@ function openManager() {
     state.dom.modal.classList.remove('im_hidden');
     state.isOpen = true;
     applyMode();   // centered modal vs floating window
+    applyCols();   // restore the chosen mobile cards-per-row
     updateSidebarLabel();
     loadAll();
 }
@@ -1250,6 +1298,8 @@ async function injectUI() {
         refresh: $('im_refresh'),
         floatToggle: $('im_float_toggle'),
         floatLabel: document.querySelector('#im_float_toggle .im_float_label'),
+        colsToggle: $('im_cols_toggle'),
+        colsLabel: $('im_cols_label'),
         selectBar: $('im_select_bar'),
         selectCount: $('im_select_count'),
         selectSize: $('im_select_size'),
@@ -1320,6 +1370,10 @@ function bindEvents() {
         applyMode();
     });
     initFloatingInteractions();
+
+    // Cards-per-row cycle button (mobile): 2 -> 3 -> 4 -> 2. Cards shrink to
+    // fit the chosen column count.
+    d.colsToggle?.addEventListener('click', cycleCols);
 
     // Pagination: previous / next page buttons + jump-to-page picker.
     d.prevPage?.addEventListener('click', () => goToPage(state.currentPage - 1));
@@ -1430,6 +1484,8 @@ async function init() {
     // Restore device-local UI preferences.
     state.mode = loadMode();
     applyMode();
+    state.cols = loadCols();
+    applyCols();
 
     // The wand container may not exist yet at load — retry a few times.
     if (!addWandButton()) {

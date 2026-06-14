@@ -414,6 +414,22 @@ body.im_modal_open {
     transition: border-color 0.15s, transform 0.1s;
 }
 
+/* Cards-per-row button: a small count badge next to the grid icon. Hidden on
+   desktop (the desktop grid auto-fills fixed-width cards), shown on mobile. */
+.im_cols_btn {
+    display: none;
+    position: relative;
+    align-items: center;
+}
+
+.im_cols_label {
+    font-size: 0.75em;
+    font-weight: 700;
+    margin-left: 3px;
+    min-width: 0.9em;
+    text-align: center;
+}
+
 #im_grid .im_card.is-selected {
     border-color: var(--SmartThemeQuoteColor, #6a9cff);
     box-shadow: 0 0 0 2px var(--SmartThemeQuoteColor, #6a9cff) inset;
@@ -770,6 +786,16 @@ body.im_modal_open {
         display: none;
     }
 
+    /* The cards-per-row button is mobile-only; show it and keep its count
+       badge visible (overriding the span-hiding rule above). */
+    .im_cols_btn {
+        display: inline-flex;
+    }
+
+    .im_toolbar > .menu_button span.im_cols_label {
+        display: inline;
+    }
+
     .im_toolbar > select {
         min-height: 30px;
         flex: 0 0 auto;
@@ -877,11 +903,14 @@ body.im_modal_open {
         min-height: 42px; /* easy tap targets */
     }
 
-    /* ---- Grid: exactly 2 cards per row on phones, scroll for the rest ----
-       NOTE: must use the #im_grid prefix to beat the desktop #im_grid rules. */
+    /* ---- Grid: user-chosen 2/3/4 cards per row on phones ----
+       The cards-per-row count comes from the --im-cols CSS variable (set in
+       JS from the toolbar button, default 2). Cards shrink in width AND height
+       to fit the chosen count. NOTE: must use the #im_grid prefix to beat the
+       desktop #im_grid rules. */
     #im_grid.im_grid {
-        /* Two even columns that always fill the width. */
-        grid-template-columns: repeat(2, 1fr);
+        /* N even columns that always fill the width. */
+        grid-template-columns: repeat(var(--im-cols, 2), 1fr);
         gap: 8px;
         padding: 8px;
     }
@@ -892,13 +921,15 @@ body.im_modal_open {
     }
 
     /* Rectangular thumbnail (2:3 portrait) whose height follows the real
-       column width, so two big cards fit per row even on narrow phones.
-       Each column is roughly 46vw wide, so a 2:3 portrait is ~69vw tall —
-       the min-height floor matches that for browsers without aspect-ratio. */
+       column width, so the cards stay proportional at any column count.
+       aspect-ratio does the real work; min-height is a fallback for old
+       browsers, derived from the approximate column width:
+         col width ~= (100vw - 2*pad - (cols-1)*gap) / cols, height = width*1.5.
+       We approximate it as (96vw / cols) * 1.5 = 144vw / cols. */
     #im_grid .im_card_thumb {
         height: auto;
         aspect-ratio: 2 / 3;
-        min-height: 64vw;
+        min-height: calc(144vw / var(--im-cols, 2));
     }
 
     /* No hover on touch — always show the action buttons (overlaid). */
@@ -920,10 +951,11 @@ body.im_modal_open {
     }
 }
 
-/* Narrow phones: keep exactly 2 cards per row (tighter gaps to save width). */
+/* Narrow phones: honour the chosen column count, just with tighter gaps to
+   save width. */
 @media (max-width: 480px) {
     #im_grid.im_grid {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(var(--im-cols, 2), 1fr);
         gap: 6px;
         padding: 6px;
     }
