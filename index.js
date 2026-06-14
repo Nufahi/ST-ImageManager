@@ -25,9 +25,9 @@ const VIDEO_EXTENSIONS = ['mp4', 'webm', 'ogv', 'mov', 'mkv'];
 // through ST settings on purpose — zoom/dock are per-screen comfort settings).
 const LS_ZOOM = 'imageManager.zoom';
 const LS_MODE = 'imageManager.mode'; // 'modal' | 'dock'
-const ZOOM_MIN = 110;
+const ZOOM_MIN = 140;
 const ZOOM_MAX = 480;
-const ZOOM_DEFAULT = 200;
+const ZOOM_DEFAULT = 240;
 
 const DEFAULT_SETTINGS = Object.freeze({
     sort: 'date-desc',
@@ -659,6 +659,14 @@ function selectAllVisible() {
     renderSelectBar();
 }
 
+/** Select EVERY image that matches the current folder/search/filter — across
+ *  all pages, not just the one on screen. */
+function selectAllFiltered() {
+    for (const img of getFilteredImages()) state.selected.add(img.path);
+    renderGrid();
+    renderSelectBar();
+}
+
 function clearSelection() {
     state.selected.clear();
     renderGrid();
@@ -1051,6 +1059,8 @@ async function injectUI() {
         selectCount: $('im_select_count'),
         selectSize: $('im_select_size'),
         selectAll: $('im_select_all'),
+        selectAllFiltered: $('im_select_all_filtered'),
+        toolbarSelectAll: $('im_toolbar_select_all'),
         deselectAll: $('im_deselect_all'),
         bulkHide: $('im_bulk_hide'),
         bulkDelete: $('im_bulk_delete'),
@@ -1136,6 +1146,8 @@ function bindEvents() {
     d.nextPage?.addEventListener('click', () => goToPage(state.currentPage + 1));
 
     d.selectAll?.addEventListener('click', selectAllVisible);
+    d.selectAllFiltered?.addEventListener('click', selectAllFiltered);
+    d.toolbarSelectAll?.addEventListener('click', selectAllFiltered);
     d.deselectAll?.addEventListener('click', clearSelection);
     d.bulkHide?.addEventListener('click', bulkHide);
     d.bulkDelete?.addEventListener('click', bulkDelete);

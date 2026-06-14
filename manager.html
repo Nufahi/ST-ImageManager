@@ -24,9 +24,13 @@
         <div id="im_select_bar" class="im_select_bar im_hidden">
             <span id="im_select_count" class="im_select_count">0 selected</span>
             <span id="im_select_size" class="im_select_size"></span>
-            <button id="im_select_all" type="button" class="menu_button menu_button_icon interactable" title="Select everything currently shown">
+            <button id="im_select_all" type="button" class="menu_button menu_button_icon interactable" title="Select all images on this page">
+                <i class="fa-solid fa-check"></i>
+                <span>Page</span>
+            </button>
+            <button id="im_select_all_filtered" type="button" class="menu_button menu_button_icon interactable" title="Select ALL images in the current view (every page)">
                 <i class="fa-solid fa-check-double"></i>
-                <span>Select All</span>
+                <span>All</span>
             </button>
             <button id="im_deselect_all" type="button" class="menu_button menu_button_icon interactable" title="Clear selection">
                 <i class="fa-solid fa-xmark"></i>
@@ -61,6 +65,9 @@
                 <option value="120">120</option>
                 <option value="240">240</option>
             </select>
+            <button id="im_toolbar_select_all" type="button" class="menu_button menu_button_icon interactable im_icon_only" title="Select ALL images in the current view (every page)">
+                <i class="fa-solid fa-check-double"></i>
+            </button>
             <button id="im_clean_old" type="button" class="menu_button menu_button_icon interactable im_icon_only" title="Bulk delete images older than a chosen age">
                 <i class="fa-solid fa-broom"></i>
             </button>
@@ -69,7 +76,7 @@
                 <i class="fa-solid fa-eye-low-vision"></i>
             </label>
             <div class="im_zoom_wrap" title="Thumbnail size">
-                <input id="im_zoom" type="range" min="110" max="480" step="10" value="200">
+                <input id="im_zoom" type="range" min="140" max="480" step="10" value="240">
             </div>
         </div>
 

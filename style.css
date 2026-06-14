@@ -386,15 +386,20 @@ body.im_modal_open {
 
 /* ---------- Grid ---------- */
 .im_grid {
-    --im-thumb: 200px; /* driven by the zoom slider via JS */
+    --im-thumb: 240px; /* fixed card size; driven by the zoom slider via JS */
     flex: 1 1 auto;
     min-height: 0;        /* critical: lets the grid actually scroll inside flex */
     overflow-y: auto;
     overflow-x: hidden;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(var(--im-thumb), 1fr));
-    gap: 12px;
-    padding: 10px 14px 18px;
+    /* FIXED-size columns (no 1fr stretching). Every card is exactly --im-thumb
+       wide; rows fill left-to-right and wrap, and the user scrolls down to see
+       all of them. This is what keeps thumbnails big, uniform and never
+       collapsed into stripes. */
+    grid-template-columns: repeat(auto-fill, var(--im-thumb));
+    justify-content: center;
+    gap: 14px;
+    padding: 14px;
     align-content: start;
     /* smoother scrolling on touch */
     -webkit-overflow-scrolling: touch;
@@ -421,16 +426,10 @@ body.im_modal_open {
 
 .im_card_thumb {
     position: relative;
-    /* Width MUST be explicit: .im_card is a flex column, and without a
-       resolved width the aspect-ratio box collapses to a thin strip before
-       the image loads (the "rows of stripes" bug). */
+    /* Fixed square: width == height == the column size. No aspect-ratio math,
+       no flex collapsing — the thumbnail is always a big, even square. */
     width: 100%;
-    aspect-ratio: 1 / 1;
-    /* Hard fallback: some ST themes / browsers fail to resolve aspect-ratio
-       inside the grid+flex chain and the card collapses to a stripe. A real
-       min-height guarantees a square-ish box regardless. (Same trick the
-       lorebook manager uses on .lmb_card_cover.) */
-    min-height: var(--im-thumb, 200px);
+    height: var(--im-thumb, 240px);
     background: rgba(0, 0, 0, 0.25);
     overflow: hidden;
 }
@@ -958,11 +957,20 @@ body.im_modal_open {
         min-height: 42px; /* easy tap targets */
     }
 
-    /* ---- Grid: respect the zoom slider but guarantee 2+ per row ---- */
+    /* ---- Grid: big fixed squares; 2 per row, scroll down for the rest ---- */
     .im_grid {
-        grid-template-columns: repeat(auto-fill, minmax(min(var(--im-thumb), 46vw), 1fr));
+        /* Two even columns that fill the width — big and uniform on phones. */
+        grid-template-columns: repeat(2, 1fr);
         gap: 8px;
         padding: 8px;
+    }
+
+    /* Height tracks the actual (responsive) column width so cards stay square.
+       min-height is a safety floor in case aspect-ratio fails to resolve. */
+    .im_card_thumb {
+        height: auto;
+        aspect-ratio: 1 / 1;
+        min-height: 42vw;
     }
 
     /* No hover on touch — always show the action buttons (overlaid). */
@@ -984,9 +992,9 @@ body.im_modal_open {
     }
 }
 
-/* Extra-tight phones: let images go nearly full-width if the user zooms in. */
+/* Extra-tight phones: still two even big squares, scroll for the rest. */
 @media (max-width: 480px) {
     .im_grid {
-        grid-template-columns: repeat(auto-fill, minmax(min(var(--im-thumb), 90vw), 1fr));
+        grid-template-columns: repeat(2, 1fr);
     }
 }
