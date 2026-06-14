@@ -29,7 +29,7 @@
   "toolbar.sort.za": "Я-А",
   "toolbar.pageSizeTitle": "Изображений на странице",
   "toolbar.selectAllTitle": "Выбрать ВСЕ изображения в текущем виде (на всех страницах)",
-  "toolbar.showHiddenTitle": "Также показывать скрытые изображения",
+  "toolbar.showHiddenTitle": "Показывать ТОЛЬКО скрытые изображения (выключите, чтобы вернуться к обычным)",
 
   "sidebar.toggleAria": "Переключить боковую панель папок",
   "sidebar.title": "Папки",

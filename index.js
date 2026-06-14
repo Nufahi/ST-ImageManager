@@ -629,7 +629,11 @@ function getFilteredImages() {
 
     let list = state.images.filter((img) => {
         if (state.activeFolder !== ALL_FOLDERS && img.folder !== state.activeFolder) return false;
-        if (!state.showHidden && hidden.has(img.path)) return false;
+        // The "show hidden" toggle is an exclusive view switch:
+        //   off -> show ONLY normal (non-hidden) images
+        //   on  -> show ONLY hidden images
+        const isHidden = hidden.has(img.path);
+        if (state.showHidden ? !isHidden : isHidden) return false;
         if (search && !img.file.toLowerCase().includes(search)) return false;
         return true;
     });
@@ -652,10 +656,12 @@ function getFilteredImages() {
         if (ta != null) return -1;
         if (tb != null) return 1;
         // Neither has a timestamp: fall back to a stable, sensible order.
-        // The API lists each folder newest-first, so a smaller folderOrder
-        // means newer. Use seq as a deterministic tiebreaker.
-        if (a.folder === b.folder) return (a.folderOrder - b.folderOrder) * dir;
-        return (a.seq - b.seq) * dir;
+        // The API lists each folder newest-first, so a SMALLER folderOrder/seq
+        // means NEWER. To stay consistent with the timestamp branch above
+        // (where a bigger ts = newer), treat "newer" as the larger sort key by
+        // negating the order index. Then `* dir` makes Newest/Oldest correct.
+        if (a.folder === b.folder) return (b.folderOrder - a.folderOrder) * dir;
+        return (b.seq - a.seq) * dir;
     });
 
     return list;
@@ -718,7 +724,9 @@ function renderFolders() {
 
     const countFor = (folderName) => state.images.filter((img) => {
         if (folderName !== ALL_FOLDERS && img.folder !== folderName) return false;
-        if (!state.showHidden && hidden.has(img.path)) return false;
+        // Match the exclusive view switch used in getFilteredImages().
+        const isHidden = hidden.has(img.path);
+        if (state.showHidden ? !isHidden : isHidden) return false;
         return true;
     }).length;
 

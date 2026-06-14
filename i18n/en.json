@@ -29,7 +29,7 @@
   "toolbar.sort.za": "Z-A",
   "toolbar.pageSizeTitle": "Images per page",
   "toolbar.selectAllTitle": "Select ALL images in the current view (every page)",
-  "toolbar.showHiddenTitle": "Also show images you have hidden",
+  "toolbar.showHiddenTitle": "Show ONLY hidden images (toggle off to return to normal images)",
 
   "sidebar.toggleAria": "Toggle folder sidebar",
   "sidebar.title": "Folders",
