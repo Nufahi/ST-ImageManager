@@ -1,0 +1,82 @@
+{
+  "app": "Менеджер изображений",
+
+  "header.title": "Менеджер изображений",
+  "header.subtitle": "Просматривайте, чистите и освобождайте место, занятое изображениями из чатов и генераций.",
+  "header.float": "Окно",
+  "header.center": "По центру",
+  "header.floatTitle": "Переключить плавающее перемещаемое окно",
+  "header.refreshTitle": "Пересканировать все папки",
+  "header.closeTitle": "Закрыть",
+
+  "select.count": "Выбрано: {{count}}",
+  "select.page": "Страница",
+  "select.pageTitle": "Выбрать все изображения на этой странице",
+  "select.all": "Все",
+  "select.allTitle": "Выбрать ВСЕ изображения в текущем виде (на всех страницах)",
+  "select.cancel": "Отмена",
+  "select.cancelTitle": "Снять выделение",
+  "select.hide": "Скрыть",
+  "select.hideTitle": "Скрыть выбранные из менеджера (файлы не удаляются)",
+  "select.delete": "Удалить",
+  "select.deleteTitle": "Безвозвратно удалить выбранные файлы с сервера",
+
+  "toolbar.searchPh": "Поиск",
+  "toolbar.sortTitle": "Сортировка изображений",
+  "toolbar.sort.newest": "Сначала новые",
+  "toolbar.sort.oldest": "Сначала старые",
+  "toolbar.sort.az": "А-Я",
+  "toolbar.sort.za": "Я-А",
+  "toolbar.pageSizeTitle": "Изображений на странице",
+  "toolbar.selectAllTitle": "Выбрать ВСЕ изображения в текущем виде (на всех страницах)",
+  "toolbar.showHiddenTitle": "Также показывать скрытые изображения",
+
+  "sidebar.toggleAria": "Переключить боковую панель папок",
+  "sidebar.title": "Папки",
+  "sidebar.subtitle": "Каждая папка — это папка изображений персонажа на сервере.",
+
+  "folder.all": "Все изображения",
+  "folder.root": "(корень)",
+
+  "page.prevTitle": "Предыдущая страница",
+  "page.nextTitle": "Следующая страница",
+  "page.jumpTitle": "Перейти на страницу",
+  "page.of": "/ {{pages}}",
+
+  "status.loading": "Загрузка изображений...",
+  "empty.noMatch": "Нет изображений по вашему запросу.",
+  "empty.none": "Здесь нет изображений. Чистить нечего!",
+
+  "card.selectTitle": "Выбрать",
+  "card.viewTitle": "Открыть в полном размере",
+  "card.hideTitle": "Скрыть из менеджера",
+  "card.unhideTitle": "Показать снова",
+  "card.deleteTitle": "Удалить файл",
+
+  "breadcrumb.sharedHint": "SillyTavern хранит одну папку изображений на ИМЯ персонажа. Разные персонажи с одинаковым именем используют общую папку — это ограничение сервера, а не баг. Совет: сортируйте по имени или используйте поиск, чтобы сгруппировать файлы одного бота (у них разные префиксы).",
+
+  "summary.images.one": "{{count}} изображение",
+  "summary.images.many": "{{count}} изображений",
+  "summary.acrossFolders.one": "{{images}} в {{count}} папке",
+  "summary.acrossFolders.many": "{{images}} в {{count}} папках",
+
+  "resize.title": "Потяните, чтобы изменить размер",
+
+  "wand.title": "Открыть Менеджер изображений для просмотра и очистки сохранённых изображений",
+
+  "toast.hidden": "Скрыто изображений: {{count}}.",
+  "toast.deleteConfirm.titleOne": "Удалить это изображение?",
+  "toast.deleteConfirm.bodyOne": "Это безвозвратно удалит файл с сервера.",
+  "toast.deleteConfirm.titleMany": "Удалить изображений: {{count}}?",
+  "toast.deleteConfirm.bodyMany": "Это безвозвратно удалит выбранные файлы с сервера.",
+  "toast.deleteConfirm.frees": "Освободит примерно {{size}}.",
+  "toast.deleting": "Удаление изображений: {{count}}...",
+  "toast.deleted.one": "Изображение удалено.",
+  "toast.deleted.many": "Удалено изображений: {{count}}.",
+  "toast.deleteFailed": "Не удалось удалить изображение.",
+  "toast.deletePartial": "Удалено {{success}}, не удалось {{failed}}.",
+
+  "slash.help": "Открывает Менеджер изображений.",
+
+  "media.broken": "Не удалось загрузить изображение"
+}

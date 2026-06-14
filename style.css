@@ -445,6 +445,21 @@ body.im_modal_open {
     cursor: pointer;   /* tap/click the image to open the viewer */
 }
 
+/* Placeholder shown when an image / video fails to load (deleted on disk,
+   corrupt, unsupported codec). Keeps the grid intact instead of showing a
+   broken-image glyph. */
+.im_card_broken {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.25);
+    color: var(--SmartThemeBodyColor, #888);
+    opacity: 0.4;
+    font-size: 2rem;
+}
+
 .im_card_check {
     position: absolute;
     top: 6px;

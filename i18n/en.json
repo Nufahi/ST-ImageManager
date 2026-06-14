@@ -1,0 +1,82 @@
+{
+  "app": "Image Manager",
+
+  "header.title": "Image Manager",
+  "header.subtitle": "Browse, clean and free up space used by chat & generated images.",
+  "header.float": "Float",
+  "header.center": "Center",
+  "header.floatTitle": "Toggle floating movable window",
+  "header.refreshTitle": "Rescan all folders",
+  "header.closeTitle": "Close",
+
+  "select.count": "{{count}} selected",
+  "select.page": "Page",
+  "select.pageTitle": "Select all images on this page",
+  "select.all": "All",
+  "select.allTitle": "Select ALL images in the current view (every page)",
+  "select.cancel": "Cancel",
+  "select.cancelTitle": "Clear selection",
+  "select.hide": "Hide",
+  "select.hideTitle": "Hide selected from this manager (does not delete files)",
+  "select.delete": "Delete",
+  "select.deleteTitle": "Permanently delete selected files from the server",
+
+  "toolbar.searchPh": "Search",
+  "toolbar.sortTitle": "Sort images",
+  "toolbar.sort.newest": "Newest",
+  "toolbar.sort.oldest": "Oldest",
+  "toolbar.sort.az": "A-Z",
+  "toolbar.sort.za": "Z-A",
+  "toolbar.pageSizeTitle": "Images per page",
+  "toolbar.selectAllTitle": "Select ALL images in the current view (every page)",
+  "toolbar.showHiddenTitle": "Also show images you have hidden",
+
+  "sidebar.toggleAria": "Toggle folder sidebar",
+  "sidebar.title": "Folders",
+  "sidebar.subtitle": "Each folder is a character's image folder on the server.",
+
+  "folder.all": "All images",
+  "folder.root": "(root)",
+
+  "page.prevTitle": "Previous page",
+  "page.nextTitle": "Next page",
+  "page.jumpTitle": "Jump to page",
+  "page.of": "/ {{pages}}",
+
+  "status.loading": "Loading images...",
+  "empty.noMatch": "No images match your search.",
+  "empty.none": "No images here. Nothing to clean!",
+
+  "card.selectTitle": "Select",
+  "card.viewTitle": "View full size",
+  "card.hideTitle": "Hide from manager",
+  "card.unhideTitle": "Unhide",
+  "card.deleteTitle": "Delete file",
+
+  "breadcrumb.sharedHint": "SillyTavern keeps one image folder per character NAME. Different characters with the same name share this folder — that's a server limitation, not a bug. Tip: sort by Name or use search to group a single bot's files (they have different prefixes).",
+
+  "summary.images.one": "{{count}} image",
+  "summary.images.many": "{{count}} images",
+  "summary.acrossFolders.one": "{{images}} across {{count}} folder",
+  "summary.acrossFolders.many": "{{images}} across {{count}} folders",
+
+  "resize.title": "Drag to resize",
+
+  "wand.title": "Open the Image Manager to browse and clean stored images",
+
+  "toast.hidden": "{{count}} image(s) hidden.",
+  "toast.deleteConfirm.titleOne": "Delete this image?",
+  "toast.deleteConfirm.bodyOne": "This permanently removes the file from the server.",
+  "toast.deleteConfirm.titleMany": "Delete {{count}} image(s)?",
+  "toast.deleteConfirm.bodyMany": "This permanently removes the selected files from the server.",
+  "toast.deleteConfirm.frees": "Frees about {{size}}.",
+  "toast.deleting": "Deleting {{count}} image(s)...",
+  "toast.deleted.one": "Image deleted.",
+  "toast.deleted.many": "Deleted {{count}} image(s).",
+  "toast.deleteFailed": "Failed to delete image.",
+  "toast.deletePartial": "Deleted {{success}}, failed {{failed}}.",
+
+  "slash.help": "Opens the Image Manager.",
+
+  "media.broken": "Image failed to load"
+}

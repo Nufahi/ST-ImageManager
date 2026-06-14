@@ -3,18 +3,18 @@
     <div class="im_panel">
         <div class="im_header">
             <div class="im_header_copy">
-                <h2><i class="fa-solid fa-images"></i> Image Manager</h2>
-                <p id="im_storage_summary">Browse, clean and free up space used by chat &amp; generated images.</p>
+                <h2><i class="fa-solid fa-images"></i> <span data-i18n="header.title">Image Manager</span></h2>
+                <p id="im_storage_summary" data-i18n="header.subtitle">Browse, clean and free up space used by chat &amp; generated images.</p>
             </div>
             <div class="im_header_actions">
-                <button id="im_float_toggle" type="button" class="menu_button menu_button_icon interactable im_icon_only" title="Toggle floating movable window">
+                <button id="im_float_toggle" type="button" class="menu_button menu_button_icon interactable im_icon_only" data-i18n-title="header.floatTitle" title="Toggle floating movable window">
                     <i class="fa-solid fa-up-down-left-right"></i>
-                    <span class="im_float_label">Float</span>
+                    <span class="im_float_label" data-i18n="header.float">Float</span>
                 </button>
-                <button id="im_refresh" type="button" class="menu_button menu_button_icon interactable im_icon_only" title="Rescan all folders">
+                <button id="im_refresh" type="button" class="menu_button menu_button_icon interactable im_icon_only" data-i18n-title="header.refreshTitle" title="Rescan all folders">
                     <i class="fa-solid fa-arrows-rotate"></i>
                 </button>
-                <button id="im_close" type="button" class="menu_button menu_button_icon interactable im_icon_only" data-im-action="close" title="Close">
+                <button id="im_close" type="button" class="menu_button menu_button_icon interactable im_icon_only" data-im-action="close" data-i18n-title="header.closeTitle" title="Close">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
@@ -24,40 +24,40 @@
         <div id="im_select_bar" class="im_select_bar im_hidden">
             <span id="im_select_count" class="im_select_count">0 selected</span>
             <span id="im_select_size" class="im_select_size"></span>
-            <button id="im_select_all" type="button" class="menu_button menu_button_icon interactable" title="Select all images on this page">
+            <button id="im_select_all" type="button" class="menu_button menu_button_icon interactable" data-i18n-title="select.pageTitle" title="Select all images on this page">
                 <i class="fa-solid fa-check"></i>
-                <span>Page</span>
+                <span data-i18n="select.page">Page</span>
             </button>
-            <button id="im_select_all_filtered" type="button" class="menu_button menu_button_icon interactable" title="Select ALL images in the current view (every page)">
+            <button id="im_select_all_filtered" type="button" class="menu_button menu_button_icon interactable" data-i18n-title="select.allTitle" title="Select ALL images in the current view (every page)">
                 <i class="fa-solid fa-check-double"></i>
-                <span>All</span>
+                <span data-i18n="select.all">All</span>
             </button>
-            <button id="im_deselect_all" type="button" class="menu_button menu_button_icon interactable" title="Clear selection">
+            <button id="im_deselect_all" type="button" class="menu_button menu_button_icon interactable" data-i18n-title="select.cancelTitle" title="Clear selection">
                 <i class="fa-solid fa-xmark"></i>
-                <span>Cancel</span>
+                <span data-i18n="select.cancel">Cancel</span>
             </button>
-            <button id="im_bulk_hide" type="button" class="menu_button menu_button_icon interactable" title="Hide selected from this manager (does not delete files)">
+            <button id="im_bulk_hide" type="button" class="menu_button menu_button_icon interactable" data-i18n-title="select.hideTitle" title="Hide selected from this manager (does not delete files)">
                 <i class="fa-solid fa-eye-slash"></i>
-                <span>Hide</span>
+                <span data-i18n="select.hide">Hide</span>
             </button>
-            <button id="im_bulk_delete" type="button" class="menu_button menu_button_icon interactable im_btn_danger" title="Permanently delete selected files from the server">
+            <button id="im_bulk_delete" type="button" class="menu_button menu_button_icon interactable im_btn_danger" data-i18n-title="select.deleteTitle" title="Permanently delete selected files from the server">
                 <i class="fa-solid fa-trash-can"></i>
-                <span>Delete</span>
+                <span data-i18n="select.delete">Delete</span>
             </button>
         </div>
 
         <div class="im_toolbar">
             <div class="im_search_wrap">
                 <i class="fa-solid fa-magnifying-glass"></i>
-                <input id="im_search" type="search" class="text_pole textarea_compact" placeholder="Search">
+                <input id="im_search" type="search" class="text_pole textarea_compact" data-i18n-placeholder="toolbar.searchPh" placeholder="Search">
             </div>
-            <select id="im_sort" class="text_pole textarea_compact" title="Sort images">
-                <option value="date-desc">Newest</option>
-                <option value="date-asc">Oldest</option>
-                <option value="name-asc">A-Z</option>
-                <option value="name-desc">Z-A</option>
+            <select id="im_sort" class="text_pole textarea_compact" data-i18n-title="toolbar.sortTitle" title="Sort images">
+                <option value="date-desc" data-i18n="toolbar.sort.newest">Newest</option>
+                <option value="date-asc" data-i18n="toolbar.sort.oldest">Oldest</option>
+                <option value="name-asc" data-i18n="toolbar.sort.az">A-Z</option>
+                <option value="name-desc" data-i18n="toolbar.sort.za">Z-A</option>
             </select>
-            <select id="im_page_size" class="text_pole textarea_compact" title="Images per page">
+            <select id="im_page_size" class="text_pole textarea_compact" data-i18n-title="toolbar.pageSizeTitle" title="Images per page">
                 <option value="10">10</option>
                 <option value="20">20</option>
                 <option value="30">30</option>
@@ -65,10 +65,10 @@
                 <option value="120">120</option>
                 <option value="240">240</option>
             </select>
-            <button id="im_toolbar_select_all" type="button" class="menu_button menu_button_icon interactable im_icon_only" title="Select ALL images in the current view (every page)">
+            <button id="im_toolbar_select_all" type="button" class="menu_button menu_button_icon interactable im_icon_only" data-i18n-title="toolbar.selectAllTitle" title="Select ALL images in the current view (every page)">
                 <i class="fa-solid fa-check-double"></i>
             </button>
-            <label class="im_toggle im_toggle_icon" title="Also show images you have hidden">
+            <label class="im_toggle im_toggle_icon" data-i18n-title="toolbar.showHiddenTitle" title="Also show images you have hidden">
                 <input id="im_show_hidden" type="checkbox">
                 <i class="fa-solid fa-eye-low-vision"></i>
             </label>
@@ -76,7 +76,7 @@
 
         <div class="im_content">
             <!-- Mobile sidebar toggle -->
-            <button id="im_sidebar_toggle" type="button" class="im_sidebar_toggle" aria-label="Toggle folder sidebar">
+            <button id="im_sidebar_toggle" type="button" class="im_sidebar_toggle" data-i18n-aria-label="sidebar.toggleAria" aria-label="Toggle folder sidebar">
                 <i class="fa-solid fa-folder-tree" aria-hidden="true"></i>
                 <span id="im_sidebar_toggle_label" class="im_sidebar_toggle_label">All images</span>
                 <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
@@ -84,8 +84,8 @@
 
             <aside id="im_sidebar" class="im_sidebar is-collapsed">
                 <div class="im_sidebar_header">
-                    <h3>Folders</h3>
-                    <p>Each folder is a character's image folder on the server.</p>
+                    <h3 data-i18n="sidebar.title">Folders</h3>
+                    <p data-i18n="sidebar.subtitle">Each folder is a character's image folder on the server.</p>
                 </div>
                 <div id="im_folder_list" class="im_folder_list"></div>
             </aside>
@@ -96,21 +96,21 @@
                     <div class="im_main_header_actions">
                         <div id="im_summary" class="im_summary"></div>
                         <div class="im_page_controls">
-                            <button id="im_prev_page" type="button" class="menu_button menu_button_icon interactable" title="Previous page"><i class="fa-solid fa-chevron-left"></i></button>
-                            <select id="im_page_select" class="text_pole textarea_compact" title="Jump to page"></select>
+                            <button id="im_prev_page" type="button" class="menu_button menu_button_icon interactable" data-i18n-title="page.prevTitle" title="Previous page"><i class="fa-solid fa-chevron-left"></i></button>
+                            <select id="im_page_select" class="text_pole textarea_compact" data-i18n-title="page.jumpTitle" title="Jump to page"></select>
                             <span id="im_page_total" class="im_summary"></span>
-                            <button id="im_next_page" type="button" class="menu_button menu_button_icon interactable" title="Next page"><i class="fa-solid fa-chevron-right"></i></button>
+                            <button id="im_next_page" type="button" class="menu_button menu_button_icon interactable" data-i18n-title="page.nextTitle" title="Next page"><i class="fa-solid fa-chevron-right"></i></button>
                         </div>
                     </div>
                 </div>
                 <div id="im_loading" class="im_status im_hidden">
                     <i class="fa-solid fa-spinner fa-spin"></i>
-                    <span>Loading images...</span>
+                    <span data-i18n="status.loading">Loading images...</span>
                 </div>
                 <div id="im_empty" class="im_status im_hidden"></div>
                 <div id="im_grid" class="im_grid"></div>
             </section>
         </div>
-        <div id="im_resize_handle" class="im_resize_handle" title="Drag to resize"></div>
+        <div id="im_resize_handle" class="im_resize_handle" data-i18n-title="resize.title" title="Drag to resize"></div>
     </div>
 </div>

@@ -12,8 +12,115 @@
  */
 
 const MODULE_NAME = 'ST-ImageManager';
-const DISPLAY_NAME = 'Image Manager';
+const EXT_PATH = `scripts/extensions/third-party/${MODULE_NAME}`;
 const SETTINGS_KEY = 'imageManager';
+
+/* ============================================================
+ * I18N — lightweight translation layer.
+ * Strings live in i18n/<lang>.json next to this file. The language is
+ * auto-detected from SillyTavern's UI locale (the one set via the top-bar
+ * language selector / /lang), falling back to navigator.language and finally
+ * to English. RU users get Russian, everyone else gets English.
+ * ============================================================ */
+const I18N_FALLBACK = 'en';
+const I18N_SUPPORTED = ['en', 'ru'];
+let I18N_LANG = I18N_FALLBACK;
+let I18N_STRINGS = {};
+let I18N_FALLBACK_STRINGS = {};
+
+function i18nDetectLang() {
+    const candidates = [];
+    try {
+        const c = SillyTavern?.getContext?.();
+        if (c) {
+            // ST 1.12+ exposes the current locale via getCurrentLocale().
+            if (typeof c.getCurrentLocale === 'function') candidates.push(c.getCurrentLocale());
+            candidates.push(c?.powerUserSettings?.locale);
+            candidates.push(c?.accountStorage?.getItem?.('language'));
+        }
+    } catch (e) { /* ignore */ }
+    try { candidates.push(localStorage.getItem('language')); } catch (e) { /* ignore */ }
+    try { candidates.push(navigator.language || navigator.userLanguage); } catch (e) { /* ignore */ }
+
+    for (const raw of candidates) {
+        if (typeof raw !== 'string' || !raw) continue;
+        const lang = raw.toLowerCase().split(/[-_]/)[0];
+        if (I18N_SUPPORTED.includes(lang)) return lang;
+    }
+    return I18N_FALLBACK;
+}
+
+async function i18nLoad() {
+    I18N_LANG = i18nDetectLang();
+    // Always load English first as the fallback so a missing key in another
+    // locale never surfaces a raw key string in the UI.
+    try {
+        const res = await fetch(`/${EXT_PATH}/i18n/${I18N_FALLBACK}.json`);
+        if (res.ok) I18N_FALLBACK_STRINGS = await res.json();
+    } catch (e) {
+        console.warn(`[${MODULE_NAME}] i18n: failed to load fallback (${I18N_FALLBACK})`, e);
+    }
+    if (I18N_LANG === I18N_FALLBACK) {
+        I18N_STRINGS = I18N_FALLBACK_STRINGS;
+        return;
+    }
+    try {
+        const res = await fetch(`/${EXT_PATH}/i18n/${I18N_LANG}.json`);
+        if (res.ok) {
+            I18N_STRINGS = await res.json();
+        } else {
+            I18N_STRINGS = I18N_FALLBACK_STRINGS;
+            I18N_LANG = I18N_FALLBACK;
+        }
+    } catch (e) {
+        console.warn(`[${MODULE_NAME}] i18n: failed to load ${I18N_LANG}`, e);
+        I18N_STRINGS = I18N_FALLBACK_STRINGS;
+        I18N_LANG = I18N_FALLBACK;
+    }
+}
+
+/** Translate a key, substituting {{var}} placeholders from params. Falls back
+ *  to English, then to the raw key so missing strings stay visible. */
+function t(key, params) {
+    let str = I18N_STRINGS[key];
+    if (str === undefined) str = I18N_FALLBACK_STRINGS[key];
+    if (str === undefined) return key;
+    if (!params) return str;
+    return str.replace(/\{\{(\w+)\}\}/g, (m, k) => (k in params ? String(params[k]) : m));
+}
+
+const DISPLAY_NAME = () => t('app');
+
+/** "N image(s)" with locale-aware singular/plural. */
+function tImages(count) {
+    return t(count === 1 ? 'summary.images.one' : 'summary.images.many', { count });
+}
+
+/** Apply translations to a DOM subtree using our own data-i18n attributes.
+ *  Supports:
+ *    data-i18n="key"                  -> sets textContent
+ *    data-i18n-title="key"            -> sets the title attribute
+ *    data-i18n-placeholder="key"      -> sets the placeholder attribute
+ *    data-i18n-aria-label="key"       -> sets the aria-label attribute
+ *  This is intentionally independent of SillyTavern's own i18n system so the
+ *  extension fully controls its own strings (including via the HTML fetch
+ *  fallback, where ST's auto-translation does not run). */
+function i18nApplyDom(root) {
+    if (!root) return;
+    root.querySelectorAll('[data-i18n]').forEach((el) => {
+        el.textContent = t(el.getAttribute('data-i18n'));
+    });
+    const attrs = [
+        ['data-i18n-title', 'title'],
+        ['data-i18n-placeholder', 'placeholder'],
+        ['data-i18n-aria-label', 'aria-label'],
+    ];
+    for (const [dataAttr, realAttr] of attrs) {
+        root.querySelectorAll(`[${dataAttr}]`).forEach((el) => {
+            el.setAttribute(realAttr, t(el.getAttribute(dataAttr)));
+        });
+    }
+}
 const ROOT_FOLDER = '__root__'; // images that live directly in /user/images
 const ALL_FOLDERS = '__all__';
 
@@ -209,7 +316,7 @@ function applyMode() {
     }
 
     if (state.dom.floatLabel) {
-        state.dom.floatLabel.textContent = isFloating ? 'Center' : 'Float';
+        state.dom.floatLabel.textContent = isFloating ? t('header.center') : t('header.float');
     }
 }
 
@@ -222,11 +329,19 @@ function initFloatingInteractions() {
         ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
         : { x: e.clientX, y: e.clientY };
 
+    // Re-entry guard: if a previous drag/resize never received its mouseup
+    // (e.g. the button was released outside the window), starting a new one
+    // would stack a second set of document listeners that never get removed.
+    // The flag makes a fresh gesture a no-op until the previous one ends.
+    let interacting = false;
+
     // --- DRAG (header) ---
     const startDrag = (e) => {
+        if (interacting) return;
         if (state.mode !== 'floating' || isMobileLayout()) return;
         if (e.target.closest('button')) return; // don't drag when tapping buttons
         if (!state.floatBox) return;
+        interacting = true;
         const p = pointXY(e);
         const start = { x: p.x, y: p.y, left: state.floatBox.left, top: state.floatBox.top };
         state.dom.modal.classList.add('im_dragging');
@@ -240,6 +355,7 @@ function initFloatingInteractions() {
             ev.preventDefault();
         };
         const end = () => {
+            interacting = false;
             state.dom.modal.classList.remove('im_dragging');
             document.removeEventListener('mousemove', move);
             document.removeEventListener('mouseup', end);
@@ -258,7 +374,9 @@ function initFloatingInteractions() {
 
     // --- RESIZE (corner handle) ---
     const startResize = (e) => {
+        if (interacting) return;
         if (state.mode !== 'floating' || isMobileLayout() || !state.floatBox) return;
+        interacting = true;
         const p = pointXY(e);
         const start = { x: p.x, y: p.y, w: state.floatBox.width, h: state.floatBox.height };
         state.dom.modal.classList.add('im_dragging');
@@ -272,6 +390,7 @@ function initFloatingInteractions() {
             ev.preventDefault();
         };
         const end = () => {
+            interacting = false;
             state.dom.modal.classList.remove('im_dragging');
             document.removeEventListener('mousemove', move);
             document.removeEventListener('mouseup', end);
@@ -475,11 +594,18 @@ async function runSizeQueue() {
         }
     };
 
-    const workers = [];
-    for (let i = 0; i < CONCURRENCY; i++) workers.push(worker());
-    await Promise.all(workers);
-
-    state.sizeRunning = false;
+    try {
+        const workers = [];
+        for (let i = 0; i < CONCURRENCY; i++) workers.push(worker());
+        await Promise.all(workers);
+    } catch (error) {
+        // A worker throwing must never permanently wedge the queue: without the
+        // finally below, state.sizeRunning would stay true and all future size
+        // scanning would silently stop for the rest of the session.
+        console.warn(`[${MODULE_NAME}] size queue error`, error);
+    } finally {
+        state.sizeRunning = false;
+    }
     renderPageControls();
     updateStorageSummary();
 }
@@ -596,11 +722,11 @@ function renderFolders() {
         return true;
     }).length;
 
-    const entries = [{ name: ALL_FOLDERS, label: 'All images', icon: 'fa-layer-group' }];
+    const entries = [{ name: ALL_FOLDERS, label: t('folder.all'), icon: 'fa-layer-group' }];
     for (const f of state.folders) {
         entries.push({
             name: f.name,
-            label: f.name === ROOT_FOLDER ? '(root)' : f.name,
+            label: f.name === ROOT_FOLDER ? t('folder.root') : f.name,
             icon: 'fa-folder',
         });
     }
@@ -631,7 +757,7 @@ function updateSidebarLabel() {
     if (!state.dom.sidebarToggleLabel) return;
     const f = state.activeFolder;
     state.dom.sidebarToggleLabel.textContent =
-        f === ALL_FOLDERS ? 'All images' : (f === ROOT_FOLDER ? '(root)' : f);
+        f === ALL_FOLDERS ? t('folder.all') : (f === ROOT_FOLDER ? t('folder.root') : f);
 }
 
 function collapseSidebarOnMobile() {
@@ -643,14 +769,14 @@ function collapseSidebarOnMobile() {
 function renderBreadcrumb() {
     if (!state.dom.breadcrumb) return;
     const f = state.activeFolder;
-    const label = f === ALL_FOLDERS ? 'All images' : (f === ROOT_FOLDER ? '(root)' : f);
+    const label = f === ALL_FOLDERS ? t('folder.all') : (f === ROOT_FOLDER ? t('folder.root') : f);
 
     // SillyTavern stores images in /user/images/<character name>/. Characters
     // that share the same name therefore share ONE folder on disk — the server
     // has no way to separate them, and neither do we. Show a quiet hint when a
     // real character folder is open so this isn't mistaken for a bug.
     const sharedHint = (f !== ALL_FOLDERS && f !== ROOT_FOLDER)
-        ? ` <i class="fa-solid fa-circle-info im_folder_hint" title="SillyTavern keeps one image folder per character NAME. Different characters with the same name share this folder — that's a server limitation, not a bug. Tip: sort by Name or use search to group a single bot's files (they have different prefixes)."></i>`
+        ? ` <i class="fa-solid fa-circle-info im_folder_hint" title="${escapeHtml(t('breadcrumb.sharedHint'))}"></i>`
         : '';
 
     state.dom.breadcrumb.innerHTML =
@@ -663,6 +789,9 @@ function cardHtml(img, hidden) {
     const isHidden = hidden.has(img.path) ? ' is-hidden' : '';
     const cachedSize = state.sizeCache.get(img.path);
     const sizeText = cachedSize != null ? humanSize(cachedSize) : '…';
+    // Media tags carry no inline onerror handler (CSP-friendly); the error
+    // fallback is wired up in JS in wireCard() instead. A broken/missing file
+    // therefore degrades to a placeholder instead of a blank/crashed card.
     const media = img.isVideo
         ? `<video class="im_card_media" src="${escapeHtml(img.url)}" preload="metadata" muted></video>`
         : `<img class="im_card_media" src="${escapeHtml(img.url)}" loading="lazy" alt="">`;
@@ -672,14 +801,14 @@ function cardHtml(img, hidden) {
     return `<div class="im_card${selected}${isHidden}" data-path="${escapeHtml(img.path)}">
         <div class="im_card_thumb">
             ${media}
-            <label class="im_card_check" title="Select">
+            <label class="im_card_check" title="${escapeHtml(t('card.selectTitle'))}">
                 <input type="checkbox" ${state.selected.has(img.path) ? 'checked' : ''}>
             </label>
             ${img.isVideo ? '<span class="im_card_badge"><i class="fa-solid fa-film"></i></span>' : ''}
             <div class="im_card_actions">
-                <button type="button" class="im_card_btn" data-act="view" title="View full size"><i class="fa-solid fa-expand"></i></button>
-                <button type="button" class="im_card_btn" data-act="hide" title="${hidden.has(img.path) ? 'Unhide' : 'Hide from manager'}"><i class="fa-solid ${hidden.has(img.path) ? 'fa-eye' : 'fa-eye-slash'}"></i></button>
-                <button type="button" class="im_card_btn im_card_btn_danger" data-act="delete" title="Delete file"><i class="fa-solid fa-trash-can"></i></button>
+                <button type="button" class="im_card_btn" data-act="view" title="${escapeHtml(t('card.viewTitle'))}"><i class="fa-solid fa-expand"></i></button>
+                <button type="button" class="im_card_btn" data-act="hide" title="${escapeHtml(hidden.has(img.path) ? t('card.unhideTitle') : t('card.hideTitle'))}"><i class="fa-solid ${hidden.has(img.path) ? 'fa-eye' : 'fa-eye-slash'}"></i></button>
+                <button type="button" class="im_card_btn im_card_btn_danger" data-act="delete" title="${escapeHtml(t('card.deleteTitle'))}"><i class="fa-solid fa-trash-can"></i></button>
             </div>
         </div>
         <div class="im_card_meta">
@@ -705,8 +834,24 @@ function wireCard(card) {
     const media = card.querySelector('.im_card_media');
     media?.addEventListener('click', (e) => {
         e.stopPropagation();
-        viewImage(img);
+        if (img) viewImage(img);
     });
+
+    // Gracefully handle a media file that fails to load (deleted on disk,
+    // corrupt, unsupported codec, network hiccup). Without this the card would
+    // show a broken-image glyph or, for videos, an unhandled media error in the
+    // console. We swap in a quiet placeholder so the grid never "crashes".
+    if (media) {
+        media.addEventListener('error', () => {
+            if (card.querySelector('.im_card_broken')) return; // already handled
+            media.style.display = 'none';
+            const ph = document.createElement('div');
+            ph.className = 'im_card_broken';
+            ph.title = t('media.broken');
+            ph.innerHTML = '<i class="fa-solid fa-image"></i>';
+            (card.querySelector('.im_card_thumb') || card).insertBefore(ph, media.nextSibling);
+        }, { once: true });
+    }
 
     card.querySelectorAll('.im_card_btn').forEach((btn) => {
         btn.addEventListener('click', (e) => {
@@ -728,13 +873,15 @@ function renderGrid() {
 
     if (totalFiltered === 0) {
         grid.innerHTML = '';
-        state.dom.empty.classList.remove('im_hidden');
-        state.dom.empty.innerHTML = state.search
-            ? '<i class="fa-solid fa-magnifying-glass"></i><span>No images match your search.</span>'
-            : '<i class="fa-solid fa-image"></i><span>No images here. Nothing to clean!</span>';
+        if (state.dom.empty) {
+            state.dom.empty.classList.remove('im_hidden');
+            state.dom.empty.innerHTML = state.search
+                ? `<i class="fa-solid fa-magnifying-glass"></i><span>${escapeHtml(t('empty.noMatch'))}</span>`
+                : `<i class="fa-solid fa-image"></i><span>${escapeHtml(t('empty.none'))}</span>`;
+        }
         return;
     }
-    state.dom.empty.classList.add('im_hidden');
+    state.dom.empty?.classList.add('im_hidden');
 
     // Render only the current page (e.g. 30/60/... images), so the browser
     // never has to lay out thousands of cards at once. This is what keeps the
@@ -769,7 +916,7 @@ function renderPageControls() {
         sel.disabled = pages <= 1;
     }
     if (state.dom.pageTotal) {
-        state.dom.pageTotal.textContent = total > 0 ? `/ ${pages}` : '';
+        state.dom.pageTotal.textContent = total > 0 ? t('page.of', { pages }) : '';
     }
     if (state.dom.summary) {
         // Count + total size of the CURRENT view (folder/search). The size is
@@ -780,7 +927,7 @@ function renderPageControls() {
             const s = state.sizeCache.get(img.path);
             if (s != null) { known += s; counted++; }
         }
-        let txt = `${total} image${total === 1 ? '' : 's'}`;
+        let txt = tImages(total);
         if (counted > 0) {
             const scanning = counted < total;
             txt += ` · ${scanning ? '~' : ''}${humanSize(known)}${scanning ? '…' : ''}`;
@@ -797,7 +944,7 @@ function renderSelectBar() {
     const count = state.selected.size;
     bar.classList.toggle('im_hidden', count === 0);
     if (state.dom.selectCount) {
-        state.dom.selectCount.textContent = `${count} selected`;
+        state.dom.selectCount.textContent = t('select.count', { count });
     }
     if (state.dom.selectSize) {
         let known = 0;
@@ -828,7 +975,10 @@ function updateStorageSummary() {
         if (s != null) { known += s; counted++; }
     }
 
-    const countText = `${totalCount} image${totalCount === 1 ? '' : 's'} across ${folderCount} folder${folderCount === 1 ? '' : 's'}`;
+    const countText = t(
+        folderCount === 1 ? 'summary.acrossFolders.one' : 'summary.acrossFolders.many',
+        { images: tImages(totalCount), count: folderCount },
+    );
 
     // The size is measured lazily in the background; show it quietly and only
     // mark it approximate while still scanning, without the confusing "N/M".
@@ -893,7 +1043,7 @@ async function bulkHide() {
     for (const p of state.selected) set.add(p);
     s.hidden = [...set];
     saveSettings();
-    toastr.info(`${state.selected.size} image(s) hidden.`);
+    toastr.info(t('toast.hidden', { count: state.selected.size }));
     state.selected.clear();
     render();
 }
@@ -910,6 +1060,12 @@ async function viewImage(img) {
         wrap.innerHTML = `<img src="${escapeHtml(img.url)}" class="im_view_media" alt="">
             <div class="im_view_caption">${escapeHtml(img.file)}</div>`;
     }
+    // If the full-size media can't load (deleted/corrupt), show a quiet message
+    // instead of a blank/broken viewer.
+    wrap.querySelector('.im_view_media')?.addEventListener('error', () => {
+        const cap = wrap.querySelector('.im_view_caption');
+        if (cap) cap.textContent = `${img.file} — ${t('media.broken')}`;
+    }, { once: true });
     try {
         const popup = new c.Popup(wrap, c.POPUP_TYPE.DISPLAY, '', { large: true, wide: true, allowVerticalScrolling: true });
         await popup.show();
@@ -923,19 +1079,19 @@ async function deleteOne(img) {
     if (!img) return;
     const c = ctx();
     const confirmed = await c.Popup.show.confirm(
-        'Delete this image?',
-        `${escapeHtml(img.file)}<br><small>This permanently removes the file from the server.</small>`,
+        t('toast.deleteConfirm.titleOne'),
+        `${escapeHtml(img.file)}<br><small>${escapeHtml(t('toast.deleteConfirm.bodyOne'))}</small>`,
     );
     if (!confirmed) return;
 
     const ok = await apiDeleteImage(img.path);
     if (ok) {
         removeImageFromState(img.path);
-        toastr.success('Image deleted.');
+        toastr.success(t('toast.deleted.one'));
         render();
         queueVisibleSizes();
     } else {
-        toastr.error('Failed to delete image.');
+        toastr.error(t('toast.deleteFailed'));
     }
 }
 
@@ -948,16 +1104,18 @@ async function bulkDelete() {
         const s = state.sizeCache.get(p);
         if (s != null) knownSize += s;
     }
-    const sizeNote = knownSize > 0 ? `<br><small>Frees about ${humanSize(knownSize)}.</small>` : '';
+    const sizeNote = knownSize > 0
+        ? `<br><small>${escapeHtml(t('toast.deleteConfirm.frees', { size: humanSize(knownSize) }))}</small>`
+        : '';
     const confirmed = await c.Popup.show.confirm(
-        `Delete ${paths.length} image(s)?`,
-        `This permanently removes the selected files from the server.${sizeNote}`,
+        t('toast.deleteConfirm.titleMany', { count: paths.length }),
+        `${escapeHtml(t('toast.deleteConfirm.bodyMany'))}${sizeNote}`,
     );
     if (!confirmed) return;
 
     let success = 0;
     let failed = 0;
-    toastr.info(`Deleting ${paths.length} image(s)...`);
+    toastr.info(t('toast.deleting', { count: paths.length }));
     for (const path of paths) {
         const img = state.images.find(i => i.path === path);
         const ok = await apiDeleteImage(img ? img.path : path);
@@ -971,8 +1129,8 @@ async function bulkDelete() {
     state.selected.clear();
     render();
     queueVisibleSizes();
-    if (failed) toastr.warning(`Deleted ${success}, failed ${failed}.`);
-    else toastr.success(`Deleted ${success} image(s).`);
+    if (failed) toastr.warning(t('toast.deletePartial', { success, failed }));
+    else toastr.success(t('toast.deleted.many', { count: success }));
 }
 
 function removeImageFromState(path) {
@@ -1050,6 +1208,12 @@ async function injectUI() {
         html = await res.text();
     }
     document.body.insertAdjacentHTML('beforeend', html);
+
+    // Apply our own localization to the freshly-injected template. This runs
+    // regardless of which path produced the HTML (ST template render or the
+    // raw fetch fallback), so the panel is always in the right language.
+    const modalEl = document.getElementById('im_modal');
+    i18nApplyDom(modalEl);
 
     const $ = (id) => document.getElementById(id);
     state.dom = {
@@ -1172,6 +1336,25 @@ function bindEvents() {
     });
 }
 
+/** Close the wand / extensions dropdown the same way SillyTavern does.
+ *  ST toggles these menus with jQuery (display:none / fadeOut), not a CSS
+ *  class, so we mirror that. Wrapped in try/catch because jQuery may not be
+ *  present on every build. */
+function closeExtensionsMenu() {
+    try {
+        if (window.jQuery) {
+            const $ = window.jQuery;
+            $('#extensionsMenu').fadeOut?.(150);
+            $('#extensionsMenu').hide?.();
+            // The wand popper wrapper (newer ST) — hide it too if present.
+            $('.options-content, #extensionsMenuButton').trigger?.('mouseleave');
+        }
+    } catch (e) { /* ignore */ }
+    // Plain-DOM fallbacks.
+    const menu = document.getElementById('extensionsMenu');
+    if (menu) menu.style.display = 'none';
+}
+
 function addWandButton() {
     const container = document.getElementById('gallery_wand_container')
         || document.getElementById('extensionsMenu');
@@ -1184,36 +1367,39 @@ function addWandButton() {
     btn.tabIndex = 0;
     btn.setAttribute('role', 'button');
     btn.style.cursor = 'pointer';
-    btn.title = 'Open the Image Manager to browse and clean stored images';
+    btn.title = t('wand.title');
 
     const icon = document.createElement('div');
     icon.classList.add('fa-solid', 'fa-images', 'extensionsMenuExtensionButton');
     const text = document.createElement('span');
-    text.textContent = DISPLAY_NAME;
+    text.textContent = DISPLAY_NAME();
 
     btn.appendChild(icon);
     btn.appendChild(text);
 
     // Guard against the handler firing twice (touch devices can fire both a
-    // pointerup/touchend AND a synthetic click for the same tap).
+    // touchend AND a synthetic click for the same tap).
     let lastFire = 0;
     const activate = (e) => {
-        // Don't let the tap bubble up to ST's menu handlers, which on mobile
-        // close the wand menu in a way that can swallow our click entirely.
+        // IMPORTANT: only preventDefault — do NOT stopPropagation here.
+        // SillyTavern closes the wand/extensions dropdown via a delegated
+        // click handler on `document`; if we stop the event from bubbling,
+        // that handler never runs and the menu stays open until you tap the
+        // screen again. Letting the click bubble lets ST auto-close it.
         e.preventDefault();
-        e.stopPropagation();
 
         const now = Date.now();
         if (now - lastFire < 400) return; // debounce double-fire
         lastFire = now;
 
-        // Open FIRST, then close the dropdown — closing it before opening can
-        // cancel the in-flight tap on some mobile webviews.
         openManager();
-        document.getElementById('extensionsMenu')?.classList.remove('open');
+
+        // Belt-and-suspenders fallback for ST builds / mobile webviews where
+        // the document click handler doesn't fire: explicitly hide the menu.
+        closeExtensionsMenu();
     };
 
-    // pointerup covers mouse + modern touch; touchend is a fallback for older
+    // click covers mouse + modern touch; touchend is a fallback for older
     // mobile webviews where the synthetic click never reaches a <div>.
     btn.addEventListener('click', activate);
     btn.addEventListener('touchend', activate, { passive: false });
@@ -1225,6 +1411,11 @@ function addWandButton() {
 async function init() {
     if (state.initialized) return;
     state.initialized = true;
+
+    // Load translations BEFORE building any UI so the panel, wand button and
+    // slash command help all appear in the right language on first paint.
+    await i18nLoad();
+    console.log(`[${MODULE_NAME}] i18n locale: ${I18N_LANG}`);
 
     await injectUI();
 
@@ -1250,7 +1441,7 @@ async function init() {
                 name: 'image-manager',
                 aliases: ['im'],
                 callback: () => { openManager(); return ''; },
-                helpString: 'Opens the Image Manager.',
+                helpString: t('slash.help'),
             }));
         }
     } catch (error) {
