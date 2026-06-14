@@ -150,23 +150,6 @@ body.im_modal_open {
     max-width: 64px;
 }
 
-/* ---------- Zoom slider (narrow, right-aligned) ---------- */
-.im_zoom_wrap {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    margin-left: auto;
-    opacity: 0.85;
-    flex: 0 0 auto;
-}
-
-.im_zoom_wrap input[type="range"] {
-    width: 84px;
-    height: 22px;
-    cursor: pointer;
-    accent-color: var(--SmartThemeQuoteColor, #6a9cff);
-}
-
 .im_select_bar {
     background: rgba(255, 200, 80, 0.08);
 }
@@ -207,6 +190,7 @@ body.im_modal_open {
     display: inline-flex;
     align-items: center;
     gap: 6px;
+    margin-left: auto;   /* push the show-hidden toggle to the right edge */
     font-size: 0.8rem;
     cursor: pointer;
     user-select: none;
@@ -391,30 +375,33 @@ body.im_modal_open {
     font-size: 2rem;
 }
 
-/* ---------- Grid ---------- */
-.im_grid {
-    --im-thumb: 240px; /* fixed card size; driven by the zoom slider via JS */
+/* ---------- Grid ----------
+ * Fixed-size RECTANGULAR cards, just like ST's character gallery: each card is
+ * --im-thumb wide and --im-thumb * 1.5 tall (a 2:3 portrait). Columns never
+ * stretch (no 1fr); rows wrap and the user scrolls down to see everything.
+ * Selectors are prefixed with #im_grid so ST themes can't override them.
+ */
+#im_grid.im_grid {
+    --im-thumb: 200px;            /* fixed card WIDTH; zoom slider drives this */
+    --im-card-h: calc(var(--im-thumb) * 1.5); /* portrait height (2:3) */
     flex: 1 1 auto;
-    min-height: 0;        /* critical: lets the grid actually scroll inside flex */
+    min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
     display: grid;
-    /* FIXED-size columns (no 1fr stretching). Every card is exactly --im-thumb
-       wide; rows fill left-to-right and wrap, and the user scrolls down to see
-       all of them. This is what keeps thumbnails big, uniform and never
-       collapsed into stripes. */
     grid-template-columns: repeat(auto-fill, var(--im-thumb));
+    grid-auto-rows: max-content;
     justify-content: center;
     gap: 14px;
     padding: 14px;
     align-content: start;
-    /* smoother scrolling on touch */
     -webkit-overflow-scrolling: touch;
 }
 
-.im_card {
+#im_grid .im_card {
     display: flex;
     flex-direction: column;
+    width: var(--im-thumb);
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.08));
     border-radius: 10px;
@@ -422,26 +409,27 @@ body.im_modal_open {
     transition: border-color 0.15s, transform 0.1s;
 }
 
-.im_card.is-selected {
+#im_grid .im_card.is-selected {
     border-color: var(--SmartThemeQuoteColor, #6a9cff);
     box-shadow: 0 0 0 2px var(--SmartThemeQuoteColor, #6a9cff) inset;
 }
 
-.im_card.is-hidden {
+#im_grid .im_card.is-hidden {
     opacity: 0.5;
 }
 
-.im_card_thumb {
+#im_grid .im_card_thumb {
     position: relative;
-    /* Fixed square: width == height == the column size. No aspect-ratio math,
-       no flex collapsing — the thumbnail is always a big, even square. */
+    /* Fixed rectangle: exact width and height, no aspect-ratio guessing, no
+       flex collapse. Always a big, even portrait thumbnail. */
     width: 100%;
-    height: var(--im-thumb, 240px);
+    height: var(--im-card-h);
     background: rgba(0, 0, 0, 0.25);
     overflow: hidden;
+    flex: 0 0 auto;
 }
 
-.im_card_media {
+#im_grid .im_card_media {
     position: absolute;
     inset: 0;
     width: 100%;
@@ -449,6 +437,7 @@ body.im_modal_open {
     max-width: none;   /* override ST's global img { max-width:100% } rules */
     object-fit: cover;
     display: block;
+    cursor: pointer;   /* tap/click the image to open the viewer */
 }
 
 .im_card_check {
@@ -485,6 +474,7 @@ body.im_modal_open {
     bottom: 0;
     left: 0;
     right: 0;
+    z-index: 3;              /* above the (absolutely-positioned) image */
     display: flex;
     justify-content: center;
     flex-wrap: wrap;          /* wrap instead of clipping when the thumb is narrow */
@@ -493,6 +483,10 @@ body.im_modal_open {
     background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
     opacity: 0;
     transition: opacity 0.15s;
+}
+
+.im_card_btn {
+    pointer-events: auto;
 }
 
 .im_card_thumb:hover .im_card_actions,
@@ -865,17 +859,6 @@ body.im_modal_open {
     .im_toggle {
         font-size: 0.78rem;
         flex: 0 0 auto;
-    }
-
-    /* Zoom slider stays inline on the right, compact — NOT its own line. */
-    .im_zoom_wrap {
-        flex: 0 0 auto;
-        margin-left: auto;
-    }
-
-    .im_zoom_wrap input[type="range"] {
-        width: 70px;
-        height: 26px; /* still a usable touch target */
     }
 
     /* ---- Select bar: icon-only too ---- */

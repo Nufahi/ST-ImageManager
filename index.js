@@ -21,13 +21,8 @@ const PAGE_SIZE_OPTIONS = Object.freeze([10, 20, 30, 60, 120, 240]);
 
 const VIDEO_EXTENSIONS = ['mp4', 'webm', 'ogv', 'mov', 'mkv'];
 
-// localStorage keys for UI preferences that are device-specific (not synced
-// through ST settings on purpose — zoom/dock are per-screen comfort settings).
-const LS_ZOOM = 'imageManager.zoom';
+// localStorage key for the device-local dock/window preference.
 const LS_MODE = 'imageManager.mode'; // 'modal' | 'dock'
-const ZOOM_MIN = 140;
-const ZOOM_MAX = 480;
-const ZOOM_DEFAULT = 240;
 
 const DEFAULT_SETTINGS = Object.freeze({
     sort: 'date-desc',
@@ -58,7 +53,6 @@ const state = {
     dom: {},
     sizeQueue: [],
     sizeRunning: false,
-    zoom: ZOOM_DEFAULT, // thumbnail min size in px
     mode: 'modal',      // 'modal' | 'dock'
 };
 
@@ -126,16 +120,6 @@ function getHiddenSet() {
 }
 
 /* ---------- device-local UI preferences (localStorage) ---------- */
-function loadZoom() {
-    const raw = Number(localStorage.getItem(LS_ZOOM));
-    if (!isNaN(raw) && raw >= ZOOM_MIN && raw <= ZOOM_MAX) return raw;
-    return ZOOM_DEFAULT;
-}
-
-function saveZoom(value) {
-    localStorage.setItem(LS_ZOOM, String(value));
-}
-
 function loadMode() {
     const raw = localStorage.getItem(LS_MODE);
     return raw === 'dock' ? 'dock' : 'modal';
@@ -145,15 +129,6 @@ function saveMode(value) {
     localStorage.setItem(LS_MODE, value === 'dock' ? 'dock' : 'modal');
 }
 
-/** Push the current zoom value into the grid via a CSS custom property. */
-function applyZoom() {
-    if (state.dom.grid) {
-        state.dom.grid.style.setProperty('--im-thumb', `${state.zoom}px`);
-    }
-    if (state.dom.zoom && Number(state.dom.zoom.value) !== state.zoom) {
-        state.dom.zoom.value = String(state.zoom);
-    }
-}
 
 /** True on phones / narrow screens / touch — where dock mode makes no sense
  *  and the panel should always be the full-screen layout. */
@@ -543,8 +518,18 @@ function wireCard(card) {
         toggleSelect(path, e.target.checked);
     });
 
+    // Tap the thumbnail (the image itself, not the buttons/checkbox) to open
+    // the full-size viewer. This is the natural gesture on phones where there
+    // is no hover to reveal the action buttons.
+    const media = card.querySelector('.im_card_media');
+    media?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        viewImage(img);
+    });
+
     card.querySelectorAll('.im_card_btn').forEach((btn) => {
         btn.addEventListener('click', (e) => {
+            e.preventDefault();
             e.stopPropagation();
             const act = btn.dataset.act;
             if (act === 'view') viewImage(img);
@@ -1011,7 +996,6 @@ function openManager() {
     state.dom.modal.classList.remove('im_hidden');
     state.isOpen = true;
     applyMode();   // sets the correct body classes for modal vs dock
-    applyZoom();
     updateSidebarLabel();
     loadAll();
 }
@@ -1062,7 +1046,6 @@ async function injectUI() {
         showHidden: $('im_show_hidden'),
         cleanOld: $('im_clean_old'),
         refresh: $('im_refresh'),
-        zoom: $('im_zoom'),
         dockToggle: $('im_dock_toggle'),
         dockLabel: document.querySelector('#im_dock_toggle .im_dock_label'),
         selectBar: $('im_select_bar'),
@@ -1129,20 +1112,6 @@ function bindEvents() {
     });
 
     d.cleanOld?.addEventListener('click', cleanOld);
-
-    // Thumbnail zoom slider — live updates the grid via a CSS variable and
-    // persists the choice locally. No re-render needed (pure CSS).
-    if (d.zoom) {
-        d.zoom.min = String(ZOOM_MIN);
-        d.zoom.max = String(ZOOM_MAX);
-        d.zoom.addEventListener('input', () => {
-            state.zoom = Number(d.zoom.value) || ZOOM_DEFAULT;
-            applyZoom();
-        });
-        d.zoom.addEventListener('change', () => {
-            saveZoom(state.zoom);
-        });
-    }
 
     // Dock / window mode toggle.
     d.dockToggle?.addEventListener('click', () => {
@@ -1230,9 +1199,7 @@ async function init() {
     await injectUI();
 
     // Restore device-local UI preferences.
-    state.zoom = loadZoom();
     state.mode = loadMode();
-    applyZoom();
     applyMode();
 
     // The wand container may not exist yet at load — retry a few times.
