@@ -726,17 +726,10 @@ body.im_modal_open {
     box-shadow: -8px 0 32px rgba(0, 0, 0, 0.45);
 }
 
-/* Shift the chat over so the dock doesn't cover it. Only on wide screens. */
-@media (min-width: 1000px) {
-    body.im_dock_open #sheld {
-        max-width: calc(100% - var(--im-dock-width, 420px)) !important;
-        margin-right: var(--im-dock-width, 420px) !important;
-        transition: max-width 0.2s ease, margin-right 0.2s ease;
-    }
-}
-
-/* On smaller desktops, the dock overlays the chat edge rather than shrinking
- * it (shrinking the chat too far is worse than a light overlap). */
+/* The dock simply floats over the right edge — it does NOT resize or shift the
+ * chat (#sheld). Forcing the chat's width/margin made it jump and stick to the
+ * panel border, so we leave the chat layout untouched and let the dock overlay
+ * it. The panel keeps pointer events on itself; the rest passes through. */
 
 /* ============================================================
  * RESPONSIVE — tablets & phones / any touch device
@@ -774,11 +767,6 @@ body.im_modal_open {
         border-radius: 0;
         border: none;
         box-shadow: none;
-    }
-
-    body.im_dock_open #sheld {
-        max-width: 100% !important;
-        margin-right: 0 !important;
     }
 
     /* ---- Compact header: title + icon buttons on ONE line ---- */
