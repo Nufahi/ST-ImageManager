@@ -132,6 +132,13 @@ const VIDEO_EXTENSIONS = ['mp4', 'webm', 'ogv', 'mov', 'mkv'];
 const LS_MODE = 'imageManager.mode';     // 'modal' | 'floating'
 const LS_FLOAT = 'imageManager.floatBox'; // { left, top, width, height }
 const LS_COLS = 'imageManager.cols';     // mobile cards-per-row (2..4)
+const LS_SIDEBAR_W = 'imageManager.sidebarW';        // desktop sidebar width (px)
+const LS_SIDEBAR_COLLAPSED = 'imageManager.sidebarCollapsed'; // '1' | '0'
+
+// Desktop folder-sidebar width bounds (px).
+const SIDEBAR_MIN_W = 120;
+const SIDEBAR_MAX_W = 420;
+const SIDEBAR_DEFAULT_W = 220;
 
 // How many cards per row the mobile grid can show. The user cycles through
 // these with the columns button; cards shrink to fit the chosen count.
@@ -170,6 +177,8 @@ const state = {
     mode: 'modal',      // 'modal' (centered) | 'floating' (movable window)
     floatBox: null,     // { left, top, width, height } when floating
     cols: DEFAULT_COLS, // mobile cards-per-row (2..4)
+    sidebarWidth: SIDEBAR_DEFAULT_W, // desktop folder-sidebar width (px)
+    sidebarCollapsed: false,         // desktop folder-sidebar collapsed?
 };
 
 /* ============================================================
@@ -273,6 +282,44 @@ function cycleCols() {
     applyCols();
 }
 
+/* ---------- desktop folder-sidebar width / collapse ---------- */
+function clampSidebarWidth(px) {
+    const n = Number(px);
+    if (!Number.isFinite(n)) return SIDEBAR_DEFAULT_W;
+    return Math.min(Math.max(n, SIDEBAR_MIN_W), SIDEBAR_MAX_W);
+}
+
+function loadSidebarWidth() {
+    return clampSidebarWidth(localStorage.getItem(LS_SIDEBAR_W) || SIDEBAR_DEFAULT_W);
+}
+
+function saveSidebarWidth(px) {
+    localStorage.setItem(LS_SIDEBAR_W, String(clampSidebarWidth(px)));
+}
+
+function loadSidebarCollapsed() {
+    return localStorage.getItem(LS_SIDEBAR_COLLAPSED) === '1';
+}
+
+function saveSidebarCollapsed(on) {
+    localStorage.setItem(LS_SIDEBAR_COLLAPSED, on ? '1' : '0');
+}
+
+/** Push the desktop sidebar width / collapsed state onto the DOM. The CSS only
+ *  acts on this in the desktop layout; on mobile the sidebar is a dropdown. */
+function applySidebarSize() {
+    const content = state.dom.content;
+    if (!content) return;
+    content.style.setProperty('--im-sidebar-w', `${state.sidebarWidth}px`);
+    content.classList.toggle('im_sidebar_collapsed', state.sidebarCollapsed);
+}
+
+function toggleSidebarCollapsed() {
+    state.sidebarCollapsed = !state.sidebarCollapsed;
+    saveSidebarCollapsed(state.sidebarCollapsed);
+    applySidebarSize();
+}
+
 function loadFloatBox() {
     try {
         const raw = JSON.parse(localStorage.getItem(LS_FLOAT) || 'null');
@@ -353,6 +400,59 @@ function applyMode() {
     if (state.dom.floatLabel) {
         state.dom.floatLabel.textContent = isFloating ? t('header.center') : t('header.float');
     }
+}
+
+/* ---------- Draggable folder-sidebar divider (desktop) ---------- */
+function initSidebarResizer() {
+    const resizer = state.dom.sidebarResizer;
+    const content = state.dom.content;
+    if (!resizer || !content) return;
+
+    let dragging = false;
+
+    const onMove = (e) => {
+        if (!dragging) return;
+        const x = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
+        // Width = pointer X relative to the content box's left edge.
+        const rect = content.getBoundingClientRect();
+        state.sidebarWidth = clampSidebarWidth(x - rect.left);
+        // Dragging implies the sidebar is shown.
+        if (state.sidebarCollapsed) {
+            state.sidebarCollapsed = false;
+            saveSidebarCollapsed(false);
+        }
+        applySidebarSize();
+        e.preventDefault();
+    };
+    const onEnd = () => {
+        if (!dragging) return;
+        dragging = false;
+        content.classList.remove('im_sidebar_dragging');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onEnd);
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('touchend', onEnd);
+        saveSidebarWidth(state.sidebarWidth);
+    };
+    const onStart = (e) => {
+        if (dragging) return;
+        if (isMobileLayout()) return; // mobile uses the dropdown, not the divider
+        dragging = true;
+        content.classList.add('im_sidebar_dragging');
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onEnd);
+        document.addEventListener('touchmove', onMove, { passive: false });
+        document.addEventListener('touchend', onEnd);
+        e.preventDefault();
+    };
+
+    resizer.addEventListener('mousedown', onStart);
+    resizer.addEventListener('touchstart', onStart, { passive: false });
+    // Double-click the divider to collapse / restore the sidebar.
+    resizer.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        toggleSidebarCollapsed();
+    });
 }
 
 /* ---------- Drag & resize for the floating window ---------- */
@@ -1252,6 +1352,7 @@ function openManager() {
     state.isOpen = true;
     applyMode();   // centered modal vs floating window
     applyCols();   // restore the chosen mobile cards-per-row
+    applySidebarSize(); // restore desktop sidebar width / collapsed state
     updateSidebarLabel();
     loadAll();
 }
@@ -1295,7 +1396,9 @@ async function injectUI() {
         empty: $('im_empty'),
         grid: $('im_grid'),
         folderList: $('im_folder_list'),
+        content: document.querySelector('#im_modal .im_content'),
         sidebar: $('im_sidebar'),
+        sidebarResizer: $('im_sidebar_resizer'),
         sidebarToggle: $('im_sidebar_toggle'),
         sidebarToggleLabel: $('im_sidebar_toggle_label'),
         breadcrumb: $('im_breadcrumb'),
@@ -1384,6 +1487,7 @@ function bindEvents() {
         applyMode();
     });
     initFloatingInteractions();
+    initSidebarResizer();
 
     // Cards-per-row cycle button (mobile): 2 -> 3 -> 4 -> 2. Cards shrink to
     // fit the chosen column count.
@@ -1500,6 +1604,9 @@ async function init() {
     applyMode();
     state.cols = loadCols();
     applyCols();
+    state.sidebarWidth = loadSidebarWidth();
+    state.sidebarCollapsed = loadSidebarCollapsed();
+    applySidebarSize();
 
     // The wand container may not exist yet at load — retry a few times.
     if (!addWandButton()) {

@@ -217,14 +217,56 @@ body.im_modal_open {
     flex: 1;
     min-height: 0;
     position: relative;
+    /* Desktop folder-sidebar width (drag the divider to change; saved). */
+    --im-sidebar-w: 220px;
 }
 
 .im_sidebar {
-    width: 220px;
+    width: var(--im-sidebar-w, 220px);
     flex-shrink: 0;
     border-right: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.08));
     overflow-y: auto;
     padding: 12px;
+    position: relative;
+}
+
+/* Draggable divider between the folder sidebar and the main grid (desktop).
+   Drag it to resize; double-click to collapse/restore. */
+.im_sidebar_resizer {
+    flex: 0 0 auto;
+    width: 6px;
+    cursor: col-resize;
+    background: transparent;
+    position: relative;
+    z-index: 3;
+    transition: background 0.12s;
+}
+
+.im_sidebar_resizer::before {
+    content: "";
+    position: absolute;
+    inset: 0 2px;
+    border-radius: 3px;
+    background: var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.12));
+    opacity: 0.5;
+    transition: opacity 0.12s, background 0.12s;
+}
+
+.im_sidebar_resizer:hover::before,
+.im_content.im_sidebar_dragging .im_sidebar_resizer::before {
+    opacity: 1;
+    background: var(--SmartThemeQuoteColor, #6a9cff);
+}
+
+/* While dragging, kill transitions and text selection for a smooth resize. */
+.im_content.im_sidebar_dragging .im_sidebar {
+    transition: none;
+}
+
+/* Collapsed state on desktop: hide the sidebar entirely, keep the divider as a
+   thin "expand" affordance. */
+.im_content.im_sidebar_collapsed .im_sidebar {
+    display: none;
 }
 
 .im_sidebar_header h3 {
@@ -883,6 +925,16 @@ body.im_modal_open {
     .im_content {
         flex-direction: column;
         position: relative;
+    }
+
+    /* The draggable divider is desktop-only; mobile uses the dropdown sidebar.
+       Also undo any desktop collapse so the dropdown always works on phones. */
+    .im_sidebar_resizer {
+        display: none;
+    }
+
+    .im_content.im_sidebar_collapsed .im_sidebar {
+        display: block;
     }
 
     .im_sidebar_toggle {

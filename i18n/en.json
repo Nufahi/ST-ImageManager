@@ -33,6 +33,7 @@
   "toolbar.showHiddenTitle": "Show ONLY hidden images (toggle off to return to normal images)",
 
   "sidebar.toggleAria": "Toggle folder sidebar",
+  "sidebar.resizerTitle": "Drag to resize · double-click to collapse",
   "sidebar.title": "Folders",
   "sidebar.subtitle": "Each folder is a character's image folder on the server.",
 
