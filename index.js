@@ -488,7 +488,17 @@ function renderBreadcrumb() {
     if (!state.dom.breadcrumb) return;
     const f = state.activeFolder;
     const label = f === ALL_FOLDERS ? 'All images' : (f === ROOT_FOLDER ? '(root)' : f);
-    state.dom.breadcrumb.innerHTML = `<i class="fa-solid fa-folder-open"></i> ${escapeHtml(label)}`;
+
+    // SillyTavern stores images in /user/images/<character name>/. Characters
+    // that share the same name therefore share ONE folder on disk — the server
+    // has no way to separate them, and neither do we. Show a quiet hint when a
+    // real character folder is open so this isn't mistaken for a bug.
+    const sharedHint = (f !== ALL_FOLDERS && f !== ROOT_FOLDER)
+        ? ` <i class="fa-solid fa-circle-info im_folder_hint" title="SillyTavern keeps one image folder per character NAME. Different characters with the same name share this folder — that's a server limitation, not a bug. Tip: sort by Name or use search to group a single bot's files (they have different prefixes)."></i>`
+        : '';
+
+    state.dom.breadcrumb.innerHTML =
+        `<i class="fa-solid fa-folder-open"></i> ${escapeHtml(label)}${sharedHint}`;
 }
 
 /** Build the HTML for a single image card. */

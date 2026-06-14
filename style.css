@@ -334,6 +334,13 @@ body.im_modal_open {
     text-overflow: ellipsis;
 }
 
+.im_folder_hint {
+    font-size: 0.75rem;
+    opacity: 0.6;
+    cursor: help;
+    flex-shrink: 0;
+}
+
 .im_main_header_actions {
     display: flex;
     align-items: center;
