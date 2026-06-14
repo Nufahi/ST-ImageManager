@@ -947,20 +947,28 @@ body.im_modal_open {
         min-height: 42px; /* easy tap targets */
     }
 
-    /* ---- Grid: big fixed squares; 2 per row, scroll down for the rest ---- */
-    .im_grid {
-        /* Two even columns that fill the width — big and uniform on phones. */
+    /* ---- Grid: exactly 2 cards per row on phones, scroll for the rest ----
+       NOTE: must use the #im_grid prefix to beat the desktop #im_grid rules. */
+    #im_grid.im_grid {
+        /* Two even columns that always fill the width. */
         grid-template-columns: repeat(2, 1fr);
         gap: 8px;
         padding: 8px;
     }
 
-    /* Height tracks the actual (responsive) column width so cards stay square.
-       min-height is a safety floor in case aspect-ratio fails to resolve. */
-    .im_card_thumb {
+    #im_grid .im_card {
+        /* Override the fixed desktop width so the card fills its grid column. */
+        width: 100%;
+    }
+
+    /* Rectangular thumbnail (2:3 portrait) whose height follows the real
+       column width, so two big cards fit per row even on narrow phones.
+       Each column is roughly 46vw wide, so a 2:3 portrait is ~69vw tall —
+       the min-height floor matches that for browsers without aspect-ratio. */
+    #im_grid .im_card_thumb {
         height: auto;
-        aspect-ratio: 1 / 1;
-        min-height: 42vw;
+        aspect-ratio: 2 / 3;
+        min-height: 64vw;
     }
 
     /* No hover on touch — always show the action buttons (overlaid). */
@@ -982,9 +990,11 @@ body.im_modal_open {
     }
 }
 
-/* Extra-tight phones: still two even big squares, scroll for the rest. */
+/* Narrow phones: keep exactly 2 cards per row (tighter gaps to save width). */
 @media (max-width: 480px) {
-    .im_grid {
+    #im_grid.im_grid {
         grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+        padding: 6px;
     }
 }
