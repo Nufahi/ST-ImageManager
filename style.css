@@ -352,12 +352,17 @@ body.im_modal_open {
     justify-content: center;
 }
 
-.im_page_controls .im_page_label,
-#im_page_label {
+#im_page_select {
+    height: 26px;
     font-size: 0.75rem;
+    padding: 0 4px;
+    min-width: 48px;
+    width: auto;
+}
+
+#im_page_total {
+    font-size: 0.72rem;
     white-space: nowrap;
-    min-width: 64px;
-    text-align: center;
 }
 
 .im_status {

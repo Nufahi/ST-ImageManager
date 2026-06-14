@@ -253,9 +253,14 @@ async function loadAll() {
 
     // Flatten
     const images = [];
+    let seq = 0;
     for (const f of folders) {
         const folderSeg = f.name === ROOT_FOLDER ? '' : `${encodeURIComponent(f.name)}/`;
         const rawSeg = f.name === ROOT_FOLDER ? '' : `${f.name}/`;
+        // The API returns each folder's files newest-first. Keep a per-folder
+        // index so we can fall back to that order when a file name has no
+        // embedded timestamp.
+        let folderIndex = 0;
         for (const file of f.files) {
             images.push({
                 folder: f.name,
@@ -266,6 +271,13 @@ async function loadAll() {
                 // browser URL (encoded)
                 url: `user/images/${folderSeg}${encodeURIComponent(file)}`,
                 isVideo: isVideoFile(file),
+                // Real date sort key: timestamp embedded in the file name
+                // (ST names inline images with Date.now()). null if unknown.
+                mtime: extractTimestamp(file),
+                // Stable fallback ordering: API order within a folder (newer
+                // first), then a global sequence so the sort is deterministic.
+                folderOrder: folderIndex++,
+                seq: seq++,
             });
         }
     }
@@ -344,11 +356,24 @@ function getFilteredImages() {
     const dir = order === 'asc' ? 1 : -1;
     list = list.slice().sort((a, b) => {
         if (field === 'name') {
-            return a.file.localeCompare(b.file) * dir;
+            return a.file.localeCompare(b.file, undefined, { numeric: true }) * dir;
         }
-        // date — we don't have a real mtime from the API, but /list already
-        // returns files in date order. We approximate by original index.
-        return (state.images.indexOf(a) - state.images.indexOf(b)) * dir;
+        // Date sort. Prefer the real timestamp baked into the file name. Files
+        // with a known timestamp always sort by it; files without one keep the
+        // API's per-folder order (which is already newest-first) and are placed
+        // after the dated ones for "newest".
+        const ta = a.mtime;
+        const tb = b.mtime;
+        if (ta != null && tb != null) return (ta - tb) * dir;
+        // Files with a known date always sort ahead of undated ones, in BOTH
+        // directions (undated age is unknown, so park it at the end).
+        if (ta != null) return -1;
+        if (tb != null) return 1;
+        // Neither has a timestamp: fall back to a stable, sensible order.
+        // The API lists each folder newest-first, so a smaller folderOrder
+        // means newer. Use seq as a deterministic tiebreaker.
+        if (a.folder === b.folder) return (a.folderOrder - b.folderOrder) * dir;
+        return (a.seq - b.seq) * dir;
     });
 
     return list;
@@ -573,10 +598,22 @@ function renderPageControls() {
     const pages = getPageCount();
     clampPage();
 
-    if (state.dom.pageLabel) {
-        state.dom.pageLabel.textContent = total > 0
-            ? `Page ${state.currentPage} / ${pages}`
-            : '';
+    // Page picker: rebuild the option list only when the page count changes,
+    // then sync the selected value to the current page.
+    const sel = state.dom.pageSelect;
+    if (sel) {
+        const needRebuild = Number(sel.dataset.pages) !== pages;
+        if (needRebuild) {
+            let opts = '';
+            for (let p = 1; p <= pages; p++) opts += `<option value="${p}">${p}</option>`;
+            sel.innerHTML = opts;
+            sel.dataset.pages = String(pages);
+        }
+        sel.value = String(state.currentPage);
+        sel.disabled = pages <= 1;
+    }
+    if (state.dom.pageTotal) {
+        state.dom.pageTotal.textContent = total > 0 ? `/ ${pages}` : '';
     }
     if (state.dom.summary) {
         state.dom.summary.textContent = `${total} image${total === 1 ? '' : 's'}`;
@@ -1037,7 +1074,8 @@ async function injectUI() {
         breadcrumb: $('im_breadcrumb'),
         summary: $('im_summary'),
         storageSummary: $('im_storage_summary'),
-        pageLabel: $('im_page_label'),
+        pageSelect: $('im_page_select'),
+        pageTotal: $('im_page_total'),
         prevPage: $('im_prev_page'),
         nextPage: $('im_next_page'),
         search: $('im_search'),
@@ -1120,9 +1158,10 @@ function bindEvents() {
         applyMode();
     });
 
-    // Pagination: previous / next page buttons.
+    // Pagination: previous / next page buttons + jump-to-page picker.
     d.prevPage?.addEventListener('click', () => goToPage(state.currentPage - 1));
     d.nextPage?.addEventListener('click', () => goToPage(state.currentPage + 1));
+    d.pageSelect?.addEventListener('change', () => goToPage(Number(d.pageSelect.value) || 1));
 
     d.selectAll?.addEventListener('click', selectAllVisible);
     d.selectAllFiltered?.addEventListener('click', selectAllFiltered);
