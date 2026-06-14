@@ -48,41 +48,33 @@ body.im_modal_open {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
-    padding: 5px 12px;
+    gap: 8px;
+    padding: 4px 10px;
     border-bottom: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.1));
-    flex-wrap: wrap;
-}
-
-.im_header .menu_button {
-    padding-block: 3px;
+    flex-wrap: nowrap;
 }
 
 .im_header_copy {
     min-width: 0;
     display: flex;
-    align-items: baseline;
-    gap: 10px;
-    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
 }
 
 .im_header_copy h2 {
     margin: 0;
-    font-size: 1.02rem;
+    font-size: 0.92rem;
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 6px;
     white-space: nowrap;
 }
 
-/* The summary now sits inline next to the title to save vertical space. */
+/* The long description is just fluff — never show it; the storage summary
+   appears in the breadcrumb area instead. */
 .im_header_copy p {
-    margin: 0;
-    font-size: 0.78rem;
-    opacity: 0.7;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    display: none;
 }
 
 .im_summary_size {
@@ -91,50 +83,86 @@ body.im_modal_open {
 
 .im_header_actions {
     display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
+    gap: 4px;
+    flex-wrap: nowrap;
+    flex-shrink: 0;
 }
 
-/* ---------- Toolbar (compact, single row, wraps if needed) ---------- */
+/* ---------- Compact icon-only buttons (shared) ---------- */
+.menu_button.im_icon_only {
+    min-width: 30px;
+    width: 30px;
+    height: 28px;
+    padding: 0;
+    justify-content: center;
+}
+
+.menu_button.im_icon_only span {
+    display: none;
+}
+
+/* Dock toggle keeps its label on wide screens only. */
+@media (min-width: 1001px) {
+    #im_dock_toggle.im_icon_only {
+        width: auto;
+        padding: 0 8px;
+        gap: 5px;
+    }
+    #im_dock_toggle.im_icon_only span {
+        display: inline;
+    }
+}
+
+/* ---------- Toolbar (compact single row) ---------- */
 .im_toolbar,
 .im_select_bar {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 5px 12px;
+    gap: 5px;
+    padding: 4px 10px;
     border-bottom: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.08));
     flex-wrap: wrap;
 }
 
-/* Slightly smaller controls so the bar doesn't eat the gallery space. */
 .im_toolbar .menu_button,
 .im_select_bar .menu_button {
-    font-size: 0.8rem;
-    padding-block: 4px;
+    font-size: 0.78rem;
+    padding-block: 3px;
 }
 
 .im_toolbar .text_pole,
 .im_toolbar select {
-    height: 28px;
-    font-size: 0.8rem;
+    height: 26px;
+    font-size: 0.78rem;
+    padding-block: 0;
 }
 
-/* ---------- Zoom slider ---------- */
+/* Sort / page-size selects: keep them small, sized to content. */
+#im_sort,
+#im_page_size {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 0;
+    padding-inline: 6px;
+}
+
+#im_page_size {
+    max-width: 64px;
+}
+
+/* ---------- Zoom slider (narrow, right-aligned) ---------- */
 .im_zoom_wrap {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    margin-left: auto; /* push to the right edge of the toolbar */
+    gap: 4px;
+    margin-left: auto;
     opacity: 0.85;
-}
-
-.im_zoom_wrap i {
-    font-size: 0.75rem;
-    opacity: 0.7;
+    flex: 0 0 auto;
 }
 
 .im_zoom_wrap input[type="range"] {
-    width: 110px;
+    width: 84px;
+    height: 22px;
     cursor: pointer;
     accent-color: var(--SmartThemeQuoteColor, #6a9cff);
 }
@@ -145,41 +173,54 @@ body.im_modal_open {
 
 .im_select_count {
     font-weight: 600;
+    font-size: 0.8rem;
 }
 
 .im_select_size {
     opacity: 0.7;
-    font-size: 0.85rem;
+    font-size: 0.78rem;
 }
 
 .im_search_wrap {
     position: relative;
     display: flex;
     align-items: center;
-    flex: 1 1 200px;
-    min-width: 140px;
+    flex: 1 1 120px;
+    min-width: 90px;
+    max-width: 260px;
 }
 
 .im_search_wrap i {
     position: absolute;
-    left: 10px;
+    left: 8px;
+    font-size: 0.75rem;
     opacity: 0.6;
     pointer-events: none;
 }
 
 .im_search_wrap input {
     width: 100%;
-    padding-left: 30px !important;
+    padding-left: 26px !important;
 }
 
 .im_toggle {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     cursor: pointer;
     user-select: none;
     white-space: nowrap;
+}
+
+/* Show-hidden toggle as a small icon (checkbox stays accessible). */
+.im_toggle_icon {
+    gap: 4px;
+}
+
+.im_toggle_icon i {
+    font-size: 0.85rem;
+    opacity: 0.8;
 }
 
 .im_btn_danger {
@@ -276,27 +317,32 @@ body.im_modal_open {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
-    padding: 4px 14px;
-    flex-wrap: wrap;
+    gap: 8px;
+    padding: 3px 10px;
+    flex-wrap: nowrap;
 }
 
 .im_breadcrumb {
-    font-size: 0.82rem;
+    font-size: 0.8rem;
     opacity: 0.85;
     display: flex;
     align-items: center;
     gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
 .im_main_header_actions {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
+    flex-shrink: 0;
 }
 
 .im_summary {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     opacity: 0.7;
     white-space: nowrap;
 }
@@ -304,7 +350,23 @@ body.im_modal_open {
 .im_page_controls {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
+}
+
+.im_page_controls .menu_button {
+    min-width: 28px;
+    width: 28px;
+    height: 26px;
+    padding: 0;
+    justify-content: center;
+}
+
+.im_page_controls .im_page_label,
+#im_page_label {
+    font-size: 0.75rem;
+    white-space: nowrap;
+    min-width: 64px;
+    text-align: center;
 }
 
 .im_status {
@@ -364,6 +426,11 @@ body.im_modal_open {
        the image loads (the "rows of stripes" bug). */
     width: 100%;
     aspect-ratio: 1 / 1;
+    /* Hard fallback: some ST themes / browsers fail to resolve aspect-ratio
+       inside the grid+flex chain and the card collapses to a stripe. A real
+       min-height guarantees a square-ish box regardless. (Same trick the
+       lorebook manager uses on .lmb_card_cover.) */
+    min-height: var(--im-thumb, 200px);
     background: rgba(0, 0, 0, 0.25);
     overflow: hidden;
 }
@@ -373,6 +440,7 @@ body.im_modal_open {
     inset: 0;
     width: 100%;
     height: 100%;
+    max-width: none;   /* override ST's global img { max-width:100% } rules */
     object-fit: cover;
     display: block;
 }
@@ -711,9 +779,9 @@ body.im_modal_open {
         margin-right: 0 !important;
     }
 
-    /* ---- Compact header: icons only, keep it on one line ---- */
+    /* ---- Compact header: title + icon buttons on ONE line ---- */
     .im_header {
-        padding: 6px 8px;
+        padding: 4px 8px;
         gap: 6px;
         flex-wrap: nowrap;
     }
@@ -721,17 +789,10 @@ body.im_modal_open {
     .im_header_copy {
         flex: 1 1 auto;
         min-width: 0;
-        gap: 2px 8px;
     }
 
     .im_header_copy h2 {
-        font-size: 0.95rem;
-    }
-
-    .im_header_copy p {
-        flex-basis: 100%;
-        white-space: nowrap;
-        font-size: 0.72rem;
+        font-size: 0.9rem;
     }
 
     .im_header_actions {
@@ -739,66 +800,74 @@ body.im_modal_open {
         flex-wrap: nowrap;
     }
 
+    /* Dock makes no sense on phones — hide its button entirely. */
+    #im_dock_toggle {
+        display: none;
+    }
+
+    /* All header buttons are compact icon squares. */
     .im_header_actions .menu_button {
-        min-width: 34px;
-        min-height: 34px;
-        padding: 0 8px;
+        min-width: 32px;
+        width: 32px;
+        height: 30px;
+        padding: 0;
         justify-content: center;
     }
 
     .im_header_actions .menu_button span {
-        display: none; /* icon-only */
+        display: none;
     }
 
-    /* ---- Toolbar: search full-width, buttons as a flexible row ---- */
+    /* ---- Toolbar: ONE compact row, no full-width stacking ---- */
     .im_toolbar {
-        padding: 5px 8px;
-        gap: 5px;
+        padding: 4px 8px;
+        gap: 4px;
+        flex-wrap: wrap;
     }
 
     .im_search_wrap {
-        flex: 1 1 100%;
-        order: -1;
-        min-width: 0;
+        flex: 1 1 90px;
+        min-width: 80px;
+        max-width: none;
+        order: 0;
     }
 
     .im_search_wrap input {
-        min-height: 34px;
+        min-height: 30px;
     }
 
+    /* Clean-old / icon buttons stay small squares, never stretch. */
     .im_toolbar > .menu_button {
-        flex: 1 1 auto;
-        min-height: 34px;
+        flex: 0 0 auto;
+        min-height: 30px;
         justify-content: center;
         padding: 0 8px;
     }
 
     .im_toolbar > .menu_button span {
-        display: none; /* icon-only buttons (e.g. Clean Old) */
+        display: none;
     }
 
     .im_toolbar > select {
-        min-height: 34px;
-        flex: 0 1 auto;
-        max-width: 120px;
+        min-height: 30px;
+        flex: 0 0 auto;
+        max-width: 70px;
     }
 
     .im_toggle {
         font-size: 0.78rem;
+        flex: 0 0 auto;
     }
 
-    /* Zoom slider spans its own line so it's easy to drag with a thumb. */
+    /* Zoom slider stays inline on the right, compact — NOT its own line. */
     .im_zoom_wrap {
-        flex: 1 1 100%;
-        margin-left: 0;
-        justify-content: center;
-        padding: 2px 0;
+        flex: 0 0 auto;
+        margin-left: auto;
     }
 
     .im_zoom_wrap input[type="range"] {
-        flex: 1 1 auto;
-        width: auto;
-        height: 28px; /* fat touch target */
+        width: 70px;
+        height: 26px; /* still a usable touch target */
     }
 
     /* ---- Select bar: icon-only too ---- */

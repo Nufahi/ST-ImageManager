@@ -54,7 +54,6 @@ const state = {
     pageSize: DEFAULT_SETTINGS.pageSize,
     showHidden: false,
     currentPage: 1,
-    visibleCount: 0,    // how many images are currently rendered (infinite scroll)
     selected: new Set(), // set of paths
     dom: {},
     sizeQueue: [],
@@ -380,21 +379,36 @@ function getFilteredImages() {
     return list;
 }
 
-/** Images currently rendered in the grid (infinite-scroll window). */
-function getVisibleImages() {
-    const all = getFilteredImages();
-    return all.slice(0, state.visibleCount);
+/** Total number of pages for the current filtered set. */
+function getPageCount() {
+    const total = getFilteredImages().length;
+    return Math.max(1, Math.ceil(total / state.pageSize));
 }
 
-/** Backwards-compatible alias — some callers (e.g. size queue, select-all)
- *  ask for "what's on screen right now". */
+/** Clamp currentPage into a valid range and return it. */
+function clampPage() {
+    const pages = getPageCount();
+    if (state.currentPage < 1) state.currentPage = 1;
+    if (state.currentPage > pages) state.currentPage = pages;
+    return state.currentPage;
+}
+
+/** The slice of images shown on the current page. */
 function getPageImages() {
-    return getVisibleImages();
+    const all = getFilteredImages();
+    clampPage();
+    const start = (state.currentPage - 1) * state.pageSize;
+    return all.slice(start, start + state.pageSize);
 }
 
-/** Reset the infinite-scroll window back to the first batch. */
-function resetVisible() {
-    state.visibleCount = Math.min(state.pageSize, getFilteredImages().length);
+/** Jump to a page and re-render the grid (scrolls back to top). */
+function goToPage(page) {
+    state.currentPage = page;
+    clampPage();
+    renderGrid();
+    renderPageControls();
+    queueVisibleSizes();
+    if (state.dom.grid) state.dom.grid.scrollTop = 0;
 }
 
 /* ============================================================
@@ -405,7 +419,6 @@ function render() {
     renderFolders();
     renderBreadcrumb();
     renderGrid();
-    fillViewport();        // load enough cards to fill the visible area
     renderPageControls();
     renderSelectBar();
     updateStorageSummary();
@@ -547,79 +560,34 @@ function renderGrid() {
     }
     state.dom.empty.classList.add('im_hidden');
 
-    // (Re)build the first window from scratch.
-    resetVisible();
+    // Render only the current page (e.g. 30/60/... images), so the browser
+    // never has to lay out thousands of cards at once. This is what keeps the
+    // thumbnails square and the UI responsive.
     const hidden = getHiddenSet();
-    const visible = getVisibleImages();
+    const pageImages = getPageImages();
 
-    grid.innerHTML = visible.map(img => cardHtml(img, hidden)).join('');
+    grid.innerHTML = pageImages.map(img => cardHtml(img, hidden)).join('');
     grid.querySelectorAll('.im_card').forEach(wireCard);
 
-    // Jump back to the top whenever the grid is fully re-rendered
-    // (folder change, search, sort, etc.).
+    // Jump back to the top whenever the grid is re-rendered.
     grid.scrollTop = 0;
-}
-
-/**
- * Append the next batch of images to the grid without touching the ones
- * already rendered. Called by the scroll handler.
- */
-function appendMore() {
-    const grid = state.dom.grid;
-    if (!grid) return;
-
-    const all = getFilteredImages();
-    if (state.visibleCount >= all.length) return; // nothing left
-
-    const start = state.visibleCount;
-    const end = Math.min(start + state.pageSize, all.length);
-    const hidden = getHiddenSet();
-
-    const fragmentHtml = all.slice(start, end).map(img => cardHtml(img, hidden)).join('');
-    grid.insertAdjacentHTML('beforeend', fragmentHtml);
-
-    // Wire only the freshly added cards.
-    const newCards = Array.from(grid.querySelectorAll('.im_card')).slice(start);
-    newCards.forEach(wireCard);
-
-    state.visibleCount = end;
-    renderPageControls();
-    queueVisibleSizes();
-}
-
-/** True when the grid is scrolled close to the bottom. */
-function isNearBottom(el, threshold = 600) {
-    return el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
-}
-
-/**
- * If the visible content doesn't fill the viewport yet (e.g. very tall
- * window, few large thumbs), keep loading until it does or we run out.
- */
-function fillViewport() {
-    const grid = state.dom.grid;
-    if (!grid) return;
-    let guard = 0;
-    while (
-        guard++ < 50 &&
-        state.visibleCount < getFilteredImages().length &&
-        grid.scrollHeight <= grid.clientHeight + 50
-    ) {
-        appendMore();
-    }
 }
 
 function renderPageControls() {
     const total = getFilteredImages().length;
-    const shown = Math.min(state.visibleCount, total);
+    const pages = getPageCount();
+    clampPage();
+
     if (state.dom.pageLabel) {
         state.dom.pageLabel.textContent = total > 0
-            ? (shown >= total ? `${total}` : `${shown} / ${total}`)
+            ? `Page ${state.currentPage} / ${pages}`
             : '';
     }
     if (state.dom.summary) {
         state.dom.summary.textContent = `${total} image${total === 1 ? '' : 's'}`;
     }
+    if (state.dom.prevPage) state.dom.prevPage.disabled = state.currentPage <= 1;
+    if (state.dom.nextPage) state.dom.nextPage.disabled = state.currentPage >= pages;
 }
 
 function renderSelectBar() {
@@ -1163,10 +1131,9 @@ function bindEvents() {
         applyMode();
     });
 
-    // Infinite scroll: load the next batch as the user nears the bottom.
-    d.grid?.addEventListener('scroll', () => {
-        if (isNearBottom(d.grid)) appendMore();
-    }, { passive: true });
+    // Pagination: previous / next page buttons.
+    d.prevPage?.addEventListener('click', () => goToPage(state.currentPage - 1));
+    d.nextPage?.addEventListener('click', () => goToPage(state.currentPage + 1));
 
     d.selectAll?.addEventListener('click', selectAllVisible);
     d.deselectAll?.addEventListener('click', clearSelection);
