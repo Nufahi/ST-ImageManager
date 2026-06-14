@@ -17,7 +17,7 @@
   "select.cancel": "Отмена",
   "select.cancelTitle": "Снять выделение",
   "select.download": "Скачать",
-  "select.downloadTitle": "Скачать выбранные файлы на устройство",
+  "select.downloadTitle": "Скачать выбранные файлы (на ПК — одним .zip)",
   "select.hide": "Скрыть",
   "select.hideTitle": "Скрыть выбранные из менеджера (файлы не удаляются)",
   "select.delete": "Удалить",
@@ -84,6 +84,9 @@
   "toast.downloaded": "Скачано изображений: {{count}}.",
   "toast.downloadFailed": "Не удалось скачать изображение(я).",
   "toast.downloadPartial": "Скачано {{success}}, не удалось {{failed}}.",
+  "toast.zipping": "Упаковка изображений в .zip: {{count}}...",
+  "toast.zipped": "Сохранено в .zip изображений: {{count}}.",
+  "toast.zipFallback": "Не удалось собрать .zip — сохраняю файлы по отдельности.",
 
   "slash.help": "Открывает Менеджер изображений.",
 

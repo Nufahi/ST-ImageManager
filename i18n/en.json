@@ -17,7 +17,7 @@
   "select.cancel": "Cancel",
   "select.cancelTitle": "Clear selection",
   "select.download": "Download",
-  "select.downloadTitle": "Download selected files to your device",
+  "select.downloadTitle": "Download selected files (bundled into a .zip on desktop)",
   "select.hide": "Hide",
   "select.hideTitle": "Hide selected from this manager (does not delete files)",
   "select.delete": "Delete",
@@ -84,6 +84,9 @@
   "toast.downloaded": "Downloaded {{count}} image(s).",
   "toast.downloadFailed": "Failed to download image(s).",
   "toast.downloadPartial": "Downloaded {{success}}, failed {{failed}}.",
+  "toast.zipping": "Packing {{count}} image(s) into a .zip...",
+  "toast.zipped": "Saved {{count}} image(s) as a .zip.",
+  "toast.zipFallback": "Couldn't build the .zip — saving files individually instead.",
 
   "slash.help": "Opens the Image Manager.",
 

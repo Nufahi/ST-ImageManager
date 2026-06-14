@@ -1205,28 +1205,163 @@ function toggleHide(path) {
     queueVisibleSizes();
 }
 
-/**
- * Download every selected file to the user's device. Browsers block multiple
- * rapid programmatic downloads and ignore the `download` attribute for
- * cross-origin/blob-less links, so we fetch each file as a Blob and save it via
- * an object URL, spacing the saves out slightly so none get dropped. A single
- * selected file downloads immediately; many files are saved one after another.
- */
-async function downloadOne(img) {
-    // Fetch the bytes ourselves so the browser keeps the original filename and
-    // doesn't just navigate to / open the image instead of saving it.
-    const res = await fetch(img.url, { headers: reqHeaders({}) });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const blob = await res.blob();
+/* ── Minimal ZIP writer (STORE method, no external dependency) ──
+ * Produces a standard, uncompressed ZIP archive. Images/videos are already
+ * compressed, so "store" is fine and keeps this dependency-free (no CDN /
+ * JSZip needed — works offline). Each entry is { name, bytes: Uint8Array }. */
+const CRC32_TABLE = (() => {
+    const table = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+        let c = n;
+        for (let k = 0; k < 8; k++) {
+            c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        }
+        table[n] = c >>> 0;
+    }
+    return table;
+})();
+
+function crc32(bytes) {
+    let crc = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i++) {
+        crc = CRC32_TABLE[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+    }
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+/** Build a ZIP Blob from [{ name, bytes }] entries (bytes is a Uint8Array). */
+function createZipBlob(files) {
+    const encoder = new TextEncoder();
+    const fileParts = [];
+    const central = [];
+    let offset = 0;
+
+    const dosTime = 0;
+    const dosDate = 0x21; // 1980-01-01, a valid neutral timestamp.
+
+    for (const file of files) {
+        const nameBytes = encoder.encode(file.name);
+        const dataBytes = file.bytes;
+        const crc = crc32(dataBytes);
+        const size = dataBytes.length;
+
+        const localHeader = new DataView(new ArrayBuffer(30));
+        localHeader.setUint32(0, 0x04034b50, true); // local file header signature
+        localHeader.setUint16(4, 20, true);          // version needed
+        localHeader.setUint16(6, 0x0800, true);      // flags: UTF-8 names
+        localHeader.setUint16(8, 0, true);           // compression: store
+        localHeader.setUint16(10, dosTime, true);
+        localHeader.setUint16(12, dosDate, true);
+        localHeader.setUint32(14, crc, true);
+        localHeader.setUint32(18, size, true);       // compressed size
+        localHeader.setUint32(22, size, true);       // uncompressed size
+        localHeader.setUint16(26, nameBytes.length, true);
+        localHeader.setUint16(28, 0, true);          // extra field length
+
+        fileParts.push(new Uint8Array(localHeader.buffer), nameBytes, dataBytes);
+
+        const centralHeader = new DataView(new ArrayBuffer(46));
+        centralHeader.setUint32(0, 0x02014b50, true); // central dir signature
+        centralHeader.setUint16(4, 20, true);          // version made by
+        centralHeader.setUint16(6, 20, true);          // version needed
+        centralHeader.setUint16(8, 0x0800, true);      // flags: UTF-8
+        centralHeader.setUint16(10, 0, true);          // compression: store
+        centralHeader.setUint16(12, dosTime, true);
+        centralHeader.setUint16(14, dosDate, true);
+        centralHeader.setUint32(16, crc, true);
+        centralHeader.setUint32(20, size, true);
+        centralHeader.setUint32(24, size, true);
+        centralHeader.setUint16(28, nameBytes.length, true);
+        centralHeader.setUint16(30, 0, true);          // extra field length
+        centralHeader.setUint16(32, 0, true);          // comment length
+        centralHeader.setUint16(34, 0, true);          // disk number start
+        centralHeader.setUint16(36, 0, true);          // internal attrs
+        centralHeader.setUint32(38, 0, true);          // external attrs
+        centralHeader.setUint32(42, offset, true);     // local header offset
+
+        central.push(new Uint8Array(centralHeader.buffer), nameBytes);
+
+        offset += 30 + nameBytes.length + size;
+    }
+
+    const centralSize = central.reduce((sum, part) => sum + part.length, 0);
+    const centralOffset = offset;
+
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true);          // end of central dir signature
+    end.setUint16(4, 0, true);                    // disk number
+    end.setUint16(6, 0, true);                    // disk with central dir
+    end.setUint16(8, files.length, true);         // entries on this disk
+    end.setUint16(10, files.length, true);        // total entries
+    end.setUint32(12, centralSize, true);
+    end.setUint32(16, centralOffset, true);
+    end.setUint16(20, 0, true);                   // comment length
+
+    return new Blob([...fileParts, ...central, new Uint8Array(end.buffer)], { type: 'application/zip' });
+}
+
+/** Save a Blob to disk under the given filename via a temporary object URL. */
+function saveBlob(blob, filename) {
     const objUrl = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = objUrl;
-    a.download = img.file; // suggest the original file name
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     a.remove();
     // Revoke a touch later so the download has time to start.
-    setTimeout(() => URL.revokeObjectURL(objUrl), 4000);
+    setTimeout(() => URL.revokeObjectURL(objUrl), 8000);
+}
+
+/**
+ * Download a single file to the user's device. We fetch the bytes ourselves so
+ * the browser keeps the original filename and doesn't just open the image.
+ */
+async function downloadOne(img) {
+    const res = await fetch(img.url, { headers: reqHeaders({}) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    saveBlob(await res.blob(), img.file);
+}
+
+/**
+ * Save many files as ONE .zip archive (desktop), using the built-in dependency-
+ * free ZIP writer. Returns how many made it into the archive (and how many
+ * failed to fetch). File-name collisions (same name from different folders) are
+ * de-duplicated with a numeric suffix. Throws if nothing could be added.
+ */
+async function downloadAsZip(imgs) {
+    const entries = [];
+    const used = new Set();
+    let failed = 0;
+
+    for (const img of imgs) {
+        try {
+            const res = await fetch(img.url, { headers: reqHeaders({}) });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const bytes = new Uint8Array(await res.arrayBuffer());
+            // Ensure a unique name inside the zip.
+            let name = img.file;
+            if (used.has(name)) {
+                const dot = name.lastIndexOf('.');
+                const base = dot > 0 ? name.slice(0, dot) : name;
+                const ext = dot > 0 ? name.slice(dot) : '';
+                let n = 2;
+                while (used.has(`${base}_${n}${ext}`)) n++;
+                name = `${base}_${n}${ext}`;
+            }
+            used.add(name);
+            entries.push({ name, bytes });
+        } catch (error) {
+            console.error(`[${MODULE_NAME}] zip add failed for "${img.path}"`, error);
+            failed++;
+        }
+    }
+
+    if (!entries.length) throw new Error('nothing to zip');
+    const blob = createZipBlob(entries);
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    saveBlob(blob, `images-${stamp}.zip`);
+    return { added: entries.length, failed };
 }
 
 async function bulkDownload() {
@@ -1237,8 +1372,28 @@ async function bulkDownload() {
         .filter(Boolean);
     if (!imgs.length) return;
 
-    toastr.info(t('toast.downloading', { count: imgs.length }));
+    // Desktop: pack everything into one .zip (no download spam, single file).
+    // Mobile: keep saving files one-by-one (mobile browsers handle zips poorly
+    // and the per-file flow already works well there).
+    const useZip = imgs.length > 1 && !isMobileLayout();
 
+    if (useZip) {
+        toastr.info(t('toast.zipping', { count: imgs.length }));
+        try {
+            const { added, failed } = await downloadAsZip(imgs);
+            if (failed && added) toastr.warning(t('toast.downloadPartial', { success: added, failed }));
+            else toastr.success(t('toast.zipped', { count: added }));
+            return;
+        } catch (error) {
+            // Building/saving the zip failed unexpectedly — fall back to
+            // saving files one-by-one so the user still gets their images.
+            console.warn(`[${MODULE_NAME}] zip failed, falling back to per-file`, error);
+            toastr.warning(t('toast.zipFallback'));
+        }
+    }
+
+    // Per-file path (mobile, single file, or zip fallback).
+    toastr.info(t('toast.downloading', { count: imgs.length }));
     let success = 0;
     let failed = 0;
     for (const img of imgs) {
