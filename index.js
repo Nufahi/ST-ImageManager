@@ -17,7 +17,7 @@ const SETTINGS_KEY = 'imageManager';
 const ROOT_FOLDER = '__root__'; // images that live directly in /user/images
 const ALL_FOLDERS = '__all__';
 
-const PAGE_SIZE_OPTIONS = Object.freeze([30, 60, 120, 240]);
+const PAGE_SIZE_OPTIONS = Object.freeze([10, 20, 30, 60, 120, 240]);
 
 const VIDEO_EXTENSIONS = ['mp4', 'webm', 'ogv', 'mov', 'mkv'];
 

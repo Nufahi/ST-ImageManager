@@ -481,8 +481,9 @@ body.im_modal_open {
     right: 0;
     display: flex;
     justify-content: center;
+    flex-wrap: wrap;          /* wrap instead of clipping when the thumb is narrow */
     gap: 4px;
-    padding: 6px;
+    padding: 5px;
     background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
     opacity: 0;
     transition: opacity 0.15s;
@@ -497,14 +498,15 @@ body.im_modal_open {
     background: rgba(0, 0, 0, 0.55);
     border: none;
     color: #fff;
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
+    flex: 0 0 auto;       /* never let buttons shrink and get clipped */
     border-radius: 6px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     transition: background 0.15s;
 }
 
