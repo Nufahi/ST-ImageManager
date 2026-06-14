@@ -1220,27 +1220,75 @@ async function bulkHide() {
 async function viewImage(img) {
     if (!img) return;
     const c = ctx();
+
+    // Build a navigable list from the CURRENT filtered view, so the arrows walk
+    // through exactly what the user is browsing (across pages), in the same
+    // order. Fall back to a single-item list if the image isn't in the view.
+    let list = getFilteredImages();
+    let index = list.findIndex(i => i.path === img.path);
+    if (index < 0) { list = [img]; index = 0; }
+
     const wrap = document.createElement('div');
     wrap.className = 'im_view_wrap';
-    if (img.isVideo) {
-        wrap.innerHTML = `<video src="${escapeHtml(img.url)}" controls autoplay class="im_view_media"></video>
-            <div class="im_view_caption">${escapeHtml(img.file)}</div>`;
-    } else {
-        wrap.innerHTML = `<img src="${escapeHtml(img.url)}" class="im_view_media" alt="">
-            <div class="im_view_caption">${escapeHtml(img.file)}</div>`;
-    }
-    // If the full-size media can't load (deleted/corrupt), show a quiet message
-    // instead of a blank/broken viewer.
-    wrap.querySelector('.im_view_media')?.addEventListener('error', () => {
-        const cap = wrap.querySelector('.im_view_caption');
-        if (cap) cap.textContent = `${img.file} — ${t('media.broken')}`;
-    }, { once: true });
+    wrap.innerHTML = `
+        <div class="im_view_stage">
+            <button type="button" class="im_view_nav im_view_prev" data-nav="prev" title="${escapeHtml(t('viewer.prev'))}" aria-label="${escapeHtml(t('viewer.prev'))}"><i class="fa-solid fa-chevron-left"></i></button>
+            <div class="im_view_media_wrap"></div>
+            <button type="button" class="im_view_nav im_view_next" data-nav="next" title="${escapeHtml(t('viewer.next'))}" aria-label="${escapeHtml(t('viewer.next'))}"><i class="fa-solid fa-chevron-right"></i></button>
+        </div>
+        <div class="im_view_caption"></div>`;
+
+    const mediaWrap = wrap.querySelector('.im_view_media_wrap');
+    const caption = wrap.querySelector('.im_view_caption');
+    const prevBtn = wrap.querySelector('[data-nav="prev"]');
+    const nextBtn = wrap.querySelector('[data-nav="next"]');
+
+    // Render the image/video at the current index into the stage.
+    const renderViewer = () => {
+        const cur = list[index];
+        if (!cur) return;
+        mediaWrap.innerHTML = cur.isVideo
+            ? `<video src="${escapeHtml(cur.url)}" controls autoplay class="im_view_media"></video>`
+            : `<img src="${escapeHtml(cur.url)}" class="im_view_media" alt="">`;
+        const pos = list.length > 1 ? ` (${index + 1}/${list.length})` : '';
+        caption.textContent = `${cur.file}${pos}`;
+        // Broken-media fallback for the full-size view.
+        mediaWrap.querySelector('.im_view_media')?.addEventListener('error', () => {
+            caption.textContent = `${cur.file} — ${t('media.broken')}`;
+        }, { once: true });
+        // Only one item -> hide the arrows entirely.
+        const multi = list.length > 1;
+        prevBtn.classList.toggle('im_hidden', !multi);
+        nextBtn.classList.toggle('im_hidden', !multi);
+    };
+
+    const go = (delta) => {
+        if (list.length < 2) return;
+        // Wrap around so it loops endlessly in both directions.
+        index = (index + delta + list.length) % list.length;
+        renderViewer();
+    };
+
+    prevBtn.addEventListener('click', (e) => { e.stopPropagation(); go(-1); });
+    nextBtn.addEventListener('click', (e) => { e.stopPropagation(); go(1); });
+
+    // Keyboard arrows while the viewer is open.
+    const onKey = (e) => {
+        if (e.key === 'ArrowLeft') { e.preventDefault(); go(-1); }
+        else if (e.key === 'ArrowRight') { e.preventDefault(); go(1); }
+    };
+    document.addEventListener('keydown', onKey, true);
+
+    renderViewer();
+
     try {
         const popup = new c.Popup(wrap, c.POPUP_TYPE.DISPLAY, '', { large: true, wide: true, allowVerticalScrolling: true });
         await popup.show();
     } catch (error) {
         // Fallback: open in new tab
-        window.open(img.url, '_blank');
+        window.open(list[index]?.url || img.url, '_blank');
+    } finally {
+        document.removeEventListener('keydown', onKey, true);
     }
 }
 

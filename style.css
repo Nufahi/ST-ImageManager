@@ -651,10 +651,53 @@ body.im_modal_open {
     gap: 8px;
 }
 
+/* The stage holds the media flanked by the prev/next arrows. */
+.im_view_stage {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+}
+
+.im_view_media_wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
 .im_view_media {
     max-width: 100%;
     max-height: 80vh;
     border-radius: 8px;
+}
+
+/* Prev / next navigation arrows. */
+.im_view_nav {
+    flex: 0 0 auto;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.18));
+    background: rgba(0, 0, 0, 0.45);
+    color: var(--SmartThemeBodyColor, #fff);
+    cursor: pointer;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.12s, transform 0.1s;
+}
+
+.im_view_nav:hover {
+    background: var(--SmartThemeQuoteColor, #6a9cff);
+    transform: scale(1.08);
+}
+
+.im_view_nav.im_hidden {
+    display: none;
 }
 
 .im_view_caption {
@@ -662,6 +705,18 @@ body.im_modal_open {
     opacity: 0.7;
     word-break: break-all;
     text-align: center;
+}
+
+@media (max-width: 1000px), (pointer: coarse) {
+    /* Smaller, tighter arrows on phones so they don't crowd the image. */
+    .im_view_nav {
+        width: 38px;
+        height: 38px;
+        font-size: 1rem;
+    }
+    .im_view_stage {
+        gap: 4px;
+    }
 }
 
 

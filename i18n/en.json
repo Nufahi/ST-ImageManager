@@ -80,5 +80,8 @@
 
   "slash.help": "Opens the Image Manager.",
 
-  "media.broken": "Image failed to load"
+  "media.broken": "Image failed to load",
+
+  "viewer.prev": "Previous (←)",
+  "viewer.next": "Next (→)"
 }
