@@ -165,6 +165,7 @@ const state = {
     images: [],
     sizeCache: new Map(), // path -> bytes (lazily filled)
     activeFolder: ALL_FOLDERS,
+    autoFolderPending: false, // jump to current character's folder on next load
     search: '',
     sort: DEFAULT_SETTINGS.sort,
     pageSize: DEFAULT_SETTINGS.pageSize,
@@ -186,6 +187,27 @@ const state = {
  * ============================================================ */
 function ctx() {
     return SillyTavern.getContext();
+}
+
+/**
+ * The image folder name of the character currently being chatted with, or null
+ * if none is open (welcome screen) or a group chat is active. SillyTavern stores
+ * each character's images in /user/images/<character name>/, so the folder name
+ * equals the character's name — exactly the value the folder sidebar uses. This
+ * lets us auto-open the right folder instead of dumping the user into "All".
+ */
+function getCurrentCharFolder() {
+    try {
+        const c = ctx();
+        // Group chats don't map to a single image folder — leave them on "All".
+        if (c.groupId) return null;
+        if (c.characterId == null) return null;
+        const char = c.characters?.[c.characterId];
+        const name = char?.name;
+        return (typeof name === 'string' && name.trim()) ? name : null;
+    } catch (e) {
+        return null;
+    }
 }
 
 function reqHeaders(extra = {}) {
@@ -671,6 +693,20 @@ async function loadAll() {
     }
     state.images = images;
 
+    // On a fresh open, jump straight to the folder of the character you're
+    // currently chatting with (so you don't have to hunt for it every time you
+    // reload the page). Only do this once per open, only if that folder
+    // actually exists, and never override an explicit folder pick or a refresh.
+    if (state.autoFolderPending) {
+        state.autoFolderPending = false;
+        const charFolder = getCurrentCharFolder();
+        if (charFolder && folders.some(f => f.name === charFolder)) {
+            state.activeFolder = charFolder;
+            state.currentPage = 1;
+            updateSidebarLabel();
+        }
+    }
+
     state.isLoading = false;
     renderLoading(false);
     render();
@@ -944,6 +980,51 @@ function renderBreadcrumb() {
         `<i class="fa-solid fa-folder-open"></i> ${escapeHtml(label)}${sharedHint}`;
 }
 
+/* ---------- Lazy media loading (IntersectionObserver) ----------
+ * Only the cards actually scrolled into view get their real media URL, so a
+ * 240-image page no longer tries to decode 240 files at once (the thing that
+ * crashes the tab on phones / Termux). Each media element starts with the URL
+ * parked in data-src; the observer promotes it to src on first sight, then
+ * stops watching that element. */
+let mediaObserver = null;
+
+function promoteMedia(media) {
+    if (!media) return;
+    const url = media.dataset.src;
+    if (!url || media.src) return; // already loaded
+    media.src = url;
+    if (media.tagName === 'VIDEO') {
+        // Now that it's in view, allow the poster frame to load.
+        media.preload = 'metadata';
+    } else {
+        media.loading = 'lazy';
+    }
+}
+
+function getMediaObserver() {
+    if (mediaObserver) return mediaObserver;
+    if (!('IntersectionObserver' in window)) return null;
+    mediaObserver = new IntersectionObserver((entries, obs) => {
+        for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            promoteMedia(entry.target);
+            obs.unobserve(entry.target);
+        }
+    }, {
+        // Start loading a little before the card is fully on screen so it feels
+        // instant while scrolling, without loading the whole page up front.
+        root: state.dom.grid || null,
+        rootMargin: '300px 0px',
+        threshold: 0.01,
+    });
+    return mediaObserver;
+}
+
+/** Stop watching every card (called before re-rendering the grid). */
+function resetMediaObserver() {
+    if (mediaObserver) mediaObserver.disconnect();
+}
+
 /** Build the HTML for a single image card. */
 function cardHtml(img, hidden) {
     const selected = state.selected.has(img.path) ? ' is-selected' : '';
@@ -953,9 +1034,16 @@ function cardHtml(img, hidden) {
     // Media tags carry no inline onerror handler (CSP-friendly); the error
     // fallback is wired up in JS in wireCard() instead. A broken/missing file
     // therefore degrades to a placeholder instead of a blank/crashed card.
+    //
+    // IMPORTANT (performance / mobile stability): we DON'T put the real URL in
+    // `src` here. The browser would otherwise try to fetch + decode every image
+    // on the page at once — with a big page size (e.g. 240) on a phone / Termux
+    // that exhausts memory and crashes the tab ("critical error"). Instead the
+    // URL lives in `data-src` and is only promoted to `src` when the card scrolls
+    // into view, via an IntersectionObserver wired up in wireCard().
     const media = img.isVideo
-        ? `<video class="im_card_media" src="${escapeHtml(img.url)}" preload="metadata" muted></video>`
-        : `<img class="im_card_media" src="${escapeHtml(img.url)}" loading="lazy" alt="">`;
+        ? `<video class="im_card_media" data-src="${escapeHtml(img.url)}" preload="none" muted></video>`
+        : `<img class="im_card_media" data-src="${escapeHtml(img.url)}" alt="">`;
     // In the "All images" view each card shows which folder (= character) the
     // image belongs to. The tag is clickable: it jumps the view to that folder.
     const folderTag = state.activeFolder === ALL_FOLDERS
@@ -999,6 +1087,14 @@ function wireCard(card) {
         if (img) viewImage(img);
     });
 
+    // Lazy-load the media: only fetch/decode it once the card scrolls into
+    // view, so big pages don't load everything at once and crash on mobile.
+    if (media) {
+        const obs = getMediaObserver();
+        if (obs) obs.observe(media);
+        else promoteMedia(media); // no IntersectionObserver -> load eagerly
+    }
+
     // Gracefully handle a media file that fails to load (deleted on disk,
     // corrupt, unsupported codec, network hiccup). Without this the card would
     // show a broken-image glyph or, for videos, an unhandled media error in the
@@ -1041,6 +1137,7 @@ function renderGrid() {
     const totalFiltered = getFilteredImages().length;
 
     if (totalFiltered === 0) {
+        resetMediaObserver();
         grid.innerHTML = '';
         if (state.dom.empty) {
             state.dom.empty.classList.remove('im_hidden');
@@ -1058,6 +1155,9 @@ function renderGrid() {
     const hidden = getHiddenSet();
     const pageImages = getPageImages();
 
+    // Stop watching the previous page's cards before we replace them, so the
+    // observer doesn't hold references to detached nodes.
+    resetMediaObserver();
     grid.innerHTML = pageImages.map(img => cardHtml(img, hidden)).join('');
     grid.querySelectorAll('.im_card').forEach(wireCard);
 
@@ -1606,6 +1706,8 @@ function openManager() {
 
     state.dom.modal.classList.remove('im_hidden');
     state.isOpen = true;
+    // Ask loadAll() to auto-jump to the current character's folder this time.
+    state.autoFolderPending = true;
     applyMode();   // centered modal vs floating window
     applyCols();   // restore the chosen mobile cards-per-row
     applySidebarSize(); // restore desktop sidebar width / collapsed state
