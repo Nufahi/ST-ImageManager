@@ -1270,6 +1270,13 @@ function toggleSelect(path, on) {
     else state.selected.delete(path);
     const card = state.dom.grid?.querySelector(`[data-path="${cssEscape(path)}"]`);
     card?.classList.toggle('is-selected', on);
+    // Keep the card's native checkbox in sync. When the toggle comes from
+    // outside the grid (e.g. the preview viewer's select button), the card's
+    // highlight was updated but the checkbox `.checked` was left stale — so it
+    // showed a selected (highlighted) card with an EMPTY checkbox, and the next
+    // tap on it just re-checked it (needing a second tap to actually clear).
+    const check = card?.querySelector('.im_card_check input');
+    if (check) check.checked = on;
     renderSelectBar();
 }
 
