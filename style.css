@@ -707,6 +707,59 @@ body.im_modal_open {
     text-align: center;
 }
 
+/* Bottom action toolbar in the viewer: select / download / delete THIS image.
+ * Lives in the free space under the image so it's easy to reach on a phone. */
+.im_view_toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 4px;
+    flex-wrap: wrap;
+}
+
+.im_view_tool {
+    flex: 0 0 auto;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.18));
+    background: rgba(0, 0, 0, 0.45);
+    color: var(--SmartThemeBodyColor, #fff);
+    cursor: pointer;
+    font-size: 1.05rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.12s, transform 0.1s, color 0.12s;
+    margin: 0;
+}
+
+.im_view_tool:hover {
+    background: var(--SmartThemeQuoteColor, #6a9cff);
+    transform: scale(1.08);
+}
+
+/* The checkbox tool is a label wrapping a hidden native checkbox. */
+.im_view_tool_check input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+}
+
+.im_view_tool_check.is-selected {
+    background: var(--SmartThemeQuoteColor, #6a9cff);
+    color: #fff;
+    border-color: var(--SmartThemeQuoteColor, #6a9cff);
+}
+
+.im_view_delete:hover {
+    background: var(--crimson70a, #b51f1f);
+    border-color: var(--crimson70a, #b51f1f);
+}
+
 @media (max-width: 1000px), (pointer: coarse) {
     /* Smaller, tighter arrows on phones so they don't crowd the image. */
     .im_view_nav {
@@ -716,6 +769,16 @@ body.im_modal_open {
     }
     .im_view_stage {
         gap: 4px;
+    }
+    /* Keep the bottom action buttons comfortably tappable on phones. */
+    .im_view_tool {
+        width: 48px;
+        height: 48px;
+        font-size: 1.15rem;
+    }
+    .im_view_toolbar {
+        gap: 14px;
+        margin-top: 8px;
     }
 }
 

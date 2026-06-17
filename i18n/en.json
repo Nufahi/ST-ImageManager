@@ -93,5 +93,9 @@
   "media.broken": "Image failed to load",
 
   "viewer.prev": "Previous (←)",
-  "viewer.next": "Next (→)"
+  "viewer.next": "Next (→)",
+  "viewer.select": "Select this image",
+  "viewer.deselect": "Deselect this image",
+  "viewer.delete": "Delete this image",
+  "viewer.download": "Download this image"
 }

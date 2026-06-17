@@ -93,5 +93,9 @@
   "media.broken": "Не удалось загрузить изображение",
 
   "viewer.prev": "Назад (←)",
-  "viewer.next": "Вперёд (→)"
+  "viewer.next": "Вперёд (→)",
+  "viewer.select": "Выбрать это изображение",
+  "viewer.deselect": "Снять выбор с изображения",
+  "viewer.delete": "Удалить это изображение",
+  "viewer.download": "Скачать это изображение"
 }

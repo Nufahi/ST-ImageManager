@@ -1544,12 +1544,36 @@ async function viewImage(img) {
             <div class="im_view_media_wrap"></div>
             <button type="button" class="im_view_nav im_view_next" data-nav="next" title="${escapeHtml(t('viewer.next'))}" aria-label="${escapeHtml(t('viewer.next'))}"><i class="fa-solid fa-chevron-right"></i></button>
         </div>
-        <div class="im_view_caption"></div>`;
+        <div class="im_view_caption"></div>
+        <div class="im_view_toolbar">
+            <label class="im_view_tool im_view_tool_check" title="${escapeHtml(t('viewer.select'))}">
+                <input type="checkbox" class="im_view_check">
+                <i class="fa-solid fa-square-check"></i>
+            </label>
+            <button type="button" class="im_view_tool im_view_download" title="${escapeHtml(t('viewer.download'))}" aria-label="${escapeHtml(t('viewer.download'))}"><i class="fa-solid fa-download"></i></button>
+            <button type="button" class="im_view_tool im_view_delete" title="${escapeHtml(t('viewer.delete'))}" aria-label="${escapeHtml(t('viewer.delete'))}"><i class="fa-solid fa-trash-can"></i></button>
+        </div>`;
 
     const mediaWrap = wrap.querySelector('.im_view_media_wrap');
     const caption = wrap.querySelector('.im_view_caption');
     const prevBtn = wrap.querySelector('[data-nav="prev"]');
     const nextBtn = wrap.querySelector('[data-nav="next"]');
+    const checkLabel = wrap.querySelector('.im_view_tool_check');
+    const checkInput = wrap.querySelector('.im_view_check');
+    const downloadBtn = wrap.querySelector('.im_view_download');
+    const deleteBtn = wrap.querySelector('.im_view_delete');
+
+    let popupRef = null;
+
+    // Reflect the current image's selected state in the bottom toolbar checkbox.
+    const syncToolbar = () => {
+        const cur = list[index];
+        if (!cur) return;
+        const sel = state.selected.has(cur.path);
+        checkInput.checked = sel;
+        checkLabel.classList.toggle('is-selected', sel);
+        checkLabel.title = sel ? t('viewer.deselect') : t('viewer.select');
+    };
 
     // Render the image/video at the current index into the stage.
     const renderViewer = () => {
@@ -1568,6 +1592,7 @@ async function viewImage(img) {
         const multi = list.length > 1;
         prevBtn.classList.toggle('im_hidden', !multi);
         nextBtn.classList.toggle('im_hidden', !multi);
+        syncToolbar();
     };
 
     const go = (delta) => {
@@ -1580,6 +1605,65 @@ async function viewImage(img) {
     prevBtn.addEventListener('click', (e) => { e.stopPropagation(); go(-1); });
     nextBtn.addEventListener('click', (e) => { e.stopPropagation(); go(1); });
 
+    // --- Bottom toolbar: select / download / delete THIS image ---
+
+    // Checkbox: toggle selection of the currently-viewed image without leaving
+    // the viewer (handy on phones — fix a mis-tap and keep browsing). This keeps
+    // the grid card and the selection bar behind the viewer in sync.
+    checkInput.addEventListener('change', (e) => {
+        const cur = list[index];
+        if (!cur) return;
+        toggleSelect(cur.path, e.target.checked);
+        syncToolbar();
+    });
+
+    // Download: save ONLY the currently-viewed file (not the whole selection).
+    downloadBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const cur = list[index];
+        if (!cur) return;
+        try {
+            await downloadOne(cur);
+            toastr.success(t('toast.downloaded', { count: 1 }));
+        } catch (error) {
+            console.error(`[${MODULE_NAME}] viewer download failed for "${cur.path}"`, error);
+            toastr.error(t('toast.downloadFailed'));
+        }
+    });
+
+    // Delete: remove ONLY the currently-viewed file (ignores the checkbox
+    // selection of other images). After deleting, the viewer advances to the
+    // next image, or closes if that was the last one.
+    deleteBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const cur = list[index];
+        if (!cur) return;
+        const confirmed = await c.Popup.show.confirm(
+            t('toast.deleteConfirm.titleOne'),
+            `${escapeHtml(cur.file)}<br><small>${escapeHtml(t('toast.deleteConfirm.bodyOne'))}</small>`,
+        );
+        if (!confirmed) return;
+        const ok = await apiDeleteImage(cur.path);
+        if (!ok) { toastr.error(t('toast.deleteFailed')); return; }
+
+        removeImageFromState(cur.path);
+        toastr.success(t('toast.deleted.one'));
+        // Refresh the grid behind the viewer.
+        render();
+        queueVisibleSizes();
+
+        // Drop the deleted item from the viewer's own navigation list.
+        list.splice(index, 1);
+        if (!list.length) {
+            // Nothing left to show — close the viewer.
+            try { popupRef?.completeCancelled?.(); } catch (err) { /* ignore */ }
+            return;
+        }
+        // Stay on the same slot (now the next image), clamping at the end.
+        if (index >= list.length) index = list.length - 1;
+        renderViewer();
+    });
+
     // Keyboard arrows while the viewer is open.
     const onKey = (e) => {
         if (e.key === 'ArrowLeft') { e.preventDefault(); go(-1); }
@@ -1587,10 +1671,37 @@ async function viewImage(img) {
     };
     document.addEventListener('keydown', onKey, true);
 
+    // --- Swipe navigation (mobile) ---
+    // Flip prev/next by swiping the media horizontally instead of hunting for
+    // the small on-screen arrows. A mostly-horizontal drag past a threshold
+    // triggers a page; vertical drags are left alone (so the popup can scroll).
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let swiping = false;
+    const SWIPE_THRESHOLD = 45; // px of horizontal travel needed to flip
+    mediaWrap.addEventListener('touchstart', (e) => {
+        if (list.length < 2 || e.touches.length !== 1) { swiping = false; return; }
+        swiping = true;
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+    mediaWrap.addEventListener('touchend', (e) => {
+        if (!swiping) return;
+        swiping = false;
+        const touch = e.changedTouches[0];
+        if (!touch) return;
+        const dx = touch.clientX - touchStartX;
+        const dy = touch.clientY - touchStartY;
+        // Only act on a deliberate, mostly-horizontal swipe.
+        if (Math.abs(dx) < SWIPE_THRESHOLD || Math.abs(dx) < Math.abs(dy)) return;
+        go(dx < 0 ? 1 : -1); // swipe left -> next, swipe right -> prev
+    }, { passive: true });
+
     renderViewer();
 
     try {
         const popup = new c.Popup(wrap, c.POPUP_TYPE.DISPLAY, '', { large: true, wide: true, allowVerticalScrolling: true });
+        popupRef = popup;
         await popup.show();
     } catch (error) {
         // Fallback: open in new tab
