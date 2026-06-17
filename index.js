@@ -1619,10 +1619,17 @@ async function viewImage(img) {
     // Checkbox: toggle selection of the currently-viewed image without leaving
     // the viewer (handy on phones — fix a mis-tap and keep browsing). This keeps
     // the grid card and the selection bar behind the viewer in sync.
-    checkInput.addEventListener('change', (e) => {
+    //
+    // We drive the toggle from the label's own click (and own the checkbox
+    // state ourselves) instead of relying on the native checkbox `change`
+    // event. On touch devices `change` can fire late, so the highlight on the
+    // round button lagged a frame and only cleared on the next tap.
+    checkLabel.addEventListener('click', (e) => {
+        e.preventDefault();   // we'll set checkInput.checked ourselves in syncToolbar
+        e.stopPropagation();
         const cur = list[index];
         if (!cur) return;
-        toggleSelect(cur.path, e.target.checked);
+        toggleSelect(cur.path, !state.selected.has(cur.path));
         syncToolbar();
     });
 
