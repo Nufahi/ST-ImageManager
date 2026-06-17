@@ -1548,7 +1548,7 @@ async function viewImage(img) {
         <div class="im_view_toolbar">
             <label class="im_view_tool im_view_tool_check" title="${escapeHtml(t('viewer.select'))}">
                 <input type="checkbox" class="im_view_check">
-                <i class="fa-solid fa-square-check"></i>
+                <i class="fa-regular fa-square im_view_check_icon"></i>
             </label>
             <button type="button" class="im_view_tool im_view_download" title="${escapeHtml(t('viewer.download'))}" aria-label="${escapeHtml(t('viewer.download'))}"><i class="fa-solid fa-download"></i></button>
             <button type="button" class="im_view_tool im_view_delete" title="${escapeHtml(t('viewer.delete'))}" aria-label="${escapeHtml(t('viewer.delete'))}"><i class="fa-solid fa-trash-can"></i></button>
@@ -1560,6 +1560,7 @@ async function viewImage(img) {
     const nextBtn = wrap.querySelector('[data-nav="next"]');
     const checkLabel = wrap.querySelector('.im_view_tool_check');
     const checkInput = wrap.querySelector('.im_view_check');
+    const checkIcon = wrap.querySelector('.im_view_check_icon');
     const downloadBtn = wrap.querySelector('.im_view_download');
     const deleteBtn = wrap.querySelector('.im_view_delete');
 
@@ -1573,6 +1574,14 @@ async function viewImage(img) {
         checkInput.checked = sel;
         checkLabel.classList.toggle('is-selected', sel);
         checkLabel.title = sel ? t('viewer.deselect') : t('viewer.select');
+        // Swap the icon so the checked/unchecked state is visually obvious
+        // (the native checkbox itself is hidden behind the round button).
+        if (checkIcon) {
+            checkIcon.classList.toggle('fa-solid', sel);
+            checkIcon.classList.toggle('fa-square-check', sel);
+            checkIcon.classList.toggle('fa-regular', !sel);
+            checkIcon.classList.toggle('fa-square', !sel);
+        }
     };
 
     // Render the image/video at the current index into the stage.
