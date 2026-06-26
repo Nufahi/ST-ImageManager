@@ -2147,6 +2147,36 @@ function bindEvents() {
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && state.isOpen && state.mode !== 'floating') closeManager();
     });
+
+    // Auto-close when the user taps one of SillyTavern's top-bar buttons
+    // (settings / presets / extensions / persona / world-info, etc.). Those
+    // open full-screen drawers that would otherwise sit hidden behind the
+    // manager, so dismiss the manager just like hitting the X. Delegated on
+    // `document` (capture) so it works no matter when the top bar is built.
+    document.addEventListener('click', onTopBarClick, true);
+}
+
+/** Top-bar buttons that should auto-close the manager when tapped. ST's top
+ *  navigation lives in #top-settings-holder; every drawer toggle there carries
+ *  the `drawer-toggle` / `drawer-icon` class. We also catch the wand and a few
+ *  known IDs directly for older / themed builds. */
+function onTopBarClick(e) {
+    if (!state.isOpen) return;
+    const target = e.target;
+    if (!(target instanceof Element)) return;
+    // Ignore clicks inside the manager itself (its own header/toolbar buttons).
+    if (target.closest('#im_modal')) return;
+
+    const hit = target.closest(
+        '#top-settings-holder .drawer-toggle, '
+        + '#top-settings-holder .drawer-icon, '
+        + '#extensionsMenuButton, '
+        + '.fillLeft .drawer-toggle, '
+        + '#sys-settings-button, #user-settings-button, #persona-management-button, '
+        + '#advanced-formatting-button, #WIDrawerIcon, #rightNavDrawerIcon, '
+        + '#leftNavDrawerIcon, #extensions-settings-button, #logo_block'
+    );
+    if (hit) closeManager();
 }
 
 /** Close the wand / extensions dropdown the same way SillyTavern does.
