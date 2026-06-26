@@ -988,14 +988,14 @@ body.im_modal_open {
 }
 
 @media (max-width: 1000px), (pointer: coarse) {
-    /* Smaller, tighter arrows on phones so they don't crowd the image. */
+    /* Hide the prev/next arrows on touch devices — swiping the image left/right
+     * does the same job and is more natural there, and dropping the arrows lets
+     * the picture use the full width of the popup. */
     .im_view_nav {
-        width: 38px;
-        height: 38px;
-        font-size: 1rem;
+        display: none;
     }
     .im_view_stage {
-        gap: 4px;
+        gap: 0;
     }
     /* Keep the bottom action buttons comfortably tappable on phones. */
     .im_view_tool {
