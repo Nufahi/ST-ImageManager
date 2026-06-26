@@ -7,7 +7,18 @@
   "header.center": "Center",
   "header.floatTitle": "Toggle floating movable window",
   "header.refreshTitle": "Rescan all folders",
+  "header.themeTitle": "Manager theme",
   "header.closeTitle": "Close",
+
+  "theme.adaptive": "Adaptive (SillyTavern)",
+  "theme.amoled": "AMOLED",
+  "theme.brown": "Brown",
+  "theme.blue": "Blue",
+  "theme.dracula": "Dracula",
+  "theme.pink": "Pink",
+  "theme.green": "Green",
+  "theme.purple": "Purple",
+  "theme.light": "Light",
 
   "select.count": "{{count}} selected",
   "select.page": "Page",

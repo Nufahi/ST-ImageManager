@@ -35,12 +35,140 @@ body.im_modal_open {
     width: min(1400px, calc(100vw - 24px));
     height: min(960px, calc(100vh - var(--topBarBlockSize, 0px) - 24px));
     margin: calc(var(--topBarBlockSize, 0px) + 8px) auto 16px;
-    background: var(--SmartThemeBlurTintColor, var(--SmartThemeBotMesBlurTintColor, #1a1a1a));
-    color: var(--SmartThemeBodyColor, #e0e0e0);
-    border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.1));
+    background: var(--im-bg, var(--SmartThemeBlurTintColor, var(--SmartThemeBotMesBlurTintColor, #1a1a1a)));
+    color: var(--im-fg, var(--SmartThemeBodyColor, #e0e0e0));
+    border: 1px solid var(--im-border, var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.1)));
     border-radius: 12px;
     box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
     overflow: hidden;
+}
+
+/* ============================================================
+ * MANAGER THEMES
+ * ------------------------------------------------------------
+ * Each theme just redefines a handful of `--SmartTheme*` custom properties
+ * (and a couple of our own `--im-*` aliases) on the themed root. Because the
+ * whole panel reads colours through these variables, overriding them here
+ * re-skins everything — grid, sidebar, toolbar, buttons, viewer — without
+ * touching any component CSS.
+ *
+ * The attribute lives on BOTH `.im_panel` (the main window) and the viewer
+ * popup wrap (`.im_view_wrap`, rendered outside the panel) so the full-screen
+ * image viewer matches the chosen theme too.
+ *
+ * `adaptive` (the default) sets NOTHING, so the manager keeps following the
+ * live SillyTavern theme as before.
+ * ============================================================ */
+[data-im-theme] {
+    /* When a theme is active these aliases win; adaptive leaves them unset so
+     * the panel falls back to the SillyTavern variables. */
+    --im-bg: var(--SmartThemeBlurTintColor, #1a1a1a);
+    --im-fg: var(--SmartThemeBodyColor, #e0e0e0);
+    --im-border: var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.12));
+}
+
+/* --- AMOLED (true black) --- */
+[data-im-theme="amoled"] {
+    --SmartThemeBlurTintColor: #000000;
+    --SmartThemeBotMesBlurTintColor: #000000;
+    --SmartThemeBodyColor: #e8e8e8;
+    --SmartThemeQuoteColor: #4f9dff;
+    --SmartThemeBorderColor: rgba(255, 255, 255, 0.14);
+    --im-bg: #000000;
+    --im-fg: #e8e8e8;
+    --im-border: rgba(255, 255, 255, 0.14);
+    --im-surface: #0a0a0a;
+}
+
+/* --- Brown / coffee --- */
+[data-im-theme="brown"] {
+    --SmartThemeBlurTintColor: #2b211a;
+    --SmartThemeBotMesBlurTintColor: #2b211a;
+    --SmartThemeBodyColor: #f0e3d4;
+    --SmartThemeQuoteColor: #d9a066;
+    --SmartThemeBorderColor: rgba(217, 160, 102, 0.28);
+    --im-bg: #2b211a;
+    --im-fg: #f0e3d4;
+    --im-border: rgba(217, 160, 102, 0.28);
+    --im-surface: #362a20;
+}
+
+/* --- Blue / midnight --- */
+[data-im-theme="blue"] {
+    --SmartThemeBlurTintColor: #0f1a2e;
+    --SmartThemeBotMesBlurTintColor: #0f1a2e;
+    --SmartThemeBodyColor: #dce9ff;
+    --SmartThemeQuoteColor: #5aa9ff;
+    --SmartThemeBorderColor: rgba(90, 169, 255, 0.28);
+    --im-bg: #0f1a2e;
+    --im-fg: #dce9ff;
+    --im-border: rgba(90, 169, 255, 0.28);
+    --im-surface: #15243f;
+}
+
+/* --- Dracula --- */
+[data-im-theme="dracula"] {
+    --SmartThemeBlurTintColor: #282a36;
+    --SmartThemeBotMesBlurTintColor: #282a36;
+    --SmartThemeBodyColor: #f8f8f2;
+    --SmartThemeQuoteColor: #bd93f9;
+    --SmartThemeBorderColor: rgba(189, 147, 249, 0.30);
+    --im-bg: #282a36;
+    --im-fg: #f8f8f2;
+    --im-border: rgba(189, 147, 249, 0.30);
+    --im-surface: #343746;
+}
+
+/* --- Pink / sakura --- */
+[data-im-theme="pink"] {
+    --SmartThemeBlurTintColor: #2e1722;
+    --SmartThemeBotMesBlurTintColor: #2e1722;
+    --SmartThemeBodyColor: #ffe4ef;
+    --SmartThemeQuoteColor: #ff79c6;
+    --SmartThemeBorderColor: rgba(255, 121, 198, 0.30);
+    --im-bg: #2e1722;
+    --im-fg: #ffe4ef;
+    --im-border: rgba(255, 121, 198, 0.30);
+    --im-surface: #3b1d2c;
+}
+
+/* --- Green / forest --- */
+[data-im-theme="green"] {
+    --SmartThemeBlurTintColor: #122019;
+    --SmartThemeBotMesBlurTintColor: #122019;
+    --SmartThemeBodyColor: #dcffe9;
+    --SmartThemeQuoteColor: #50fa7b;
+    --SmartThemeBorderColor: rgba(80, 250, 123, 0.26);
+    --im-bg: #122019;
+    --im-fg: #dcffe9;
+    --im-border: rgba(80, 250, 123, 0.26);
+    --im-surface: #182c22;
+}
+
+/* --- Purple / nebula --- */
+[data-im-theme="purple"] {
+    --SmartThemeBlurTintColor: #1e152e;
+    --SmartThemeBotMesBlurTintColor: #1e152e;
+    --SmartThemeBodyColor: #eadcff;
+    --SmartThemeQuoteColor: #b388ff;
+    --SmartThemeBorderColor: rgba(179, 136, 255, 0.30);
+    --im-bg: #1e152e;
+    --im-fg: #eadcff;
+    --im-border: rgba(179, 136, 255, 0.30);
+    --im-surface: #281b3d;
+}
+
+/* --- Light / paper --- */
+[data-im-theme="light"] {
+    --SmartThemeBlurTintColor: #f4f4f7;
+    --SmartThemeBotMesBlurTintColor: #f4f4f7;
+    --SmartThemeBodyColor: #1c1c20;
+    --SmartThemeQuoteColor: #2563eb;
+    --SmartThemeBorderColor: rgba(0, 0, 0, 0.16);
+    --im-bg: #f4f4f7;
+    --im-fg: #1c1c20;
+    --im-border: rgba(0, 0, 0, 0.16);
+    --im-surface: #ffffff;
 }
 
 /* ---------- Header (compact) ---------- */
@@ -86,6 +214,81 @@ body.im_modal_open {
     gap: 4px;
     flex-wrap: nowrap;
     flex-shrink: 0;
+}
+
+/* ---------- Theme palette picker ---------- */
+.im_theme_wrap {
+    position: relative;
+    display: inline-flex;
+}
+
+.im_theme_menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 20;
+    min-width: 180px;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 6px;
+    background: var(--im-bg, var(--SmartThemeBlurTintColor, #1a1a1a));
+    color: var(--im-fg, var(--SmartThemeBodyColor, #e0e0e0));
+    border: 1px solid var(--im-border, var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.18)));
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.im_theme_item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    padding: 7px 9px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.85rem;
+    text-align: left;
+    transition: background 0.12s, border-color 0.12s;
+}
+
+.im_theme_item:hover {
+    background: rgba(127, 127, 127, 0.18);
+}
+
+.im_theme_item.is-active {
+    border-color: var(--SmartThemeQuoteColor, #6a9cff);
+    background: rgba(127, 127, 127, 0.12);
+}
+
+.im_theme_item.is-active::after {
+    content: "\f00c"; /* fa-check */
+    font-family: "Font Awesome 6 Free", "Font Awesome 6 Pro";
+    font-weight: 900;
+    margin-left: auto;
+    color: var(--SmartThemeQuoteColor, #6a9cff);
+}
+
+/* The colour swatch preview on each theme row. */
+.im_theme_swatch {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background:
+        linear-gradient(135deg,
+            var(--sw-accent, #6a9cff) 0 50%,
+            var(--sw-bg, #1a1a1a) 50% 100%);
+}
+
+.im_theme_label {
+    flex: 1 1 auto;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* ---------- Compact icon-only buttons (shared) ---------- */
@@ -648,16 +851,40 @@ body.im_modal_open {
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;   /* center the picture + toolbar vertically */
     gap: 8px;
+    /* Fill the popup body so the content sits in the middle of the available
+     * space instead of clinging to the top (which felt off-centre, especially
+     * on phones where the image is shorter than the popup). */
+    flex: 1 1 auto;
+    min-height: 100%;
+    width: 100%;
 }
 
-/* The stage holds the media flanked by the prev/next arrows. */
+/* The host popup gets `im_view_popup` from JS once it's shown. Force its body /
+ * content wrappers to be full-height flex columns so the wrap above can
+ * actually stretch and centre its contents vertically. Scoped to our marker
+ * class so other SillyTavern popups are untouched. */
+.im_view_popup .popup-body,
+.im_view_popup .popup-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+}
+
+/* The stage holds the media flanked by the prev/next arrows. It grows to fill
+ * the free vertical space so the image is centred between the popup's top edge
+ * and the bottom action bar (instead of sitting at the very top). */
 .im_view_stage {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
     width: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 .im_view_media_wrap {

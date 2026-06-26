@@ -134,6 +134,27 @@ const LS_FLOAT = 'imageManager.floatBox'; // { left, top, width, height }
 const LS_COLS = 'imageManager.cols';     // mobile cards-per-row (2..4)
 const LS_SIDEBAR_W = 'imageManager.sidebarW';        // desktop sidebar width (px)
 const LS_SIDEBAR_COLLAPSED = 'imageManager.sidebarCollapsed'; // '1' | '0'
+const LS_THEME = 'imageManager.theme';   // manager colour theme id (see THEMES)
+
+/* ---------- Manager themes ----------
+ * Self-contained colour schemes for the manager UI. `adaptive` keeps following
+ * the live SillyTavern theme (no override); every other id maps to a
+ * `[data-im-theme="<id>"]` block in style.css. The `accent`/`bg` here are only
+ * used to draw the little swatch in the picker — the real colours live in CSS.
+ * `i18n` is the translation key for the human label. */
+const THEMES = Object.freeze([
+    { id: 'adaptive', i18n: 'theme.adaptive', accent: '#6a9cff', bg: '#1a1a1a' },
+    { id: 'amoled',   i18n: 'theme.amoled',   accent: '#4f9dff', bg: '#000000' },
+    { id: 'brown',    i18n: 'theme.brown',    accent: '#d9a066', bg: '#2b211a' },
+    { id: 'blue',     i18n: 'theme.blue',     accent: '#5aa9ff', bg: '#0f1a2e' },
+    { id: 'dracula',  i18n: 'theme.dracula',  accent: '#bd93f9', bg: '#282a36' },
+    { id: 'pink',     i18n: 'theme.pink',     accent: '#ff79c6', bg: '#2e1722' },
+    { id: 'green',    i18n: 'theme.green',    accent: '#50fa7b', bg: '#122019' },
+    { id: 'purple',   i18n: 'theme.purple',   accent: '#b388ff', bg: '#1e152e' },
+    { id: 'light',    i18n: 'theme.light',    accent: '#2563eb', bg: '#f4f4f7' },
+]);
+const DEFAULT_THEME = 'adaptive';
+const THEME_IDS = THEMES.map(t => t.id);
 
 // Desktop folder-sidebar width bounds (px).
 const SIDEBAR_MIN_W = 120;
@@ -180,6 +201,7 @@ const state = {
     cols: DEFAULT_COLS, // mobile cards-per-row (2..4)
     sidebarWidth: SIDEBAR_DEFAULT_W, // desktop folder-sidebar width (px)
     sidebarCollapsed: false,         // desktop folder-sidebar collapsed?
+    theme: DEFAULT_THEME,            // manager colour theme id
 };
 
 /* ============================================================
@@ -325,6 +347,104 @@ function loadSidebarCollapsed() {
 
 function saveSidebarCollapsed(on) {
     localStorage.setItem(LS_SIDEBAR_COLLAPSED, on ? '1' : '0');
+}
+
+/* ---------- manager theme ---------- */
+function loadTheme() {
+    const raw = localStorage.getItem(LS_THEME);
+    return THEME_IDS.includes(raw) ? raw : DEFAULT_THEME;
+}
+
+function saveTheme(id) {
+    const v = THEME_IDS.includes(id) ? id : DEFAULT_THEME;
+    localStorage.setItem(LS_THEME, v);
+}
+
+/** Stamp the chosen theme onto the main panel. `adaptive` removes the marker so
+ *  the manager keeps following the live SillyTavern theme. The full-size image
+ *  viewer (a separate popup) is themed on the fly when it opens, via
+ *  applyThemeTo(). */
+function applyTheme() {
+    const id = state.theme || DEFAULT_THEME;
+    applyThemeTo(state.dom.panel);
+    // Keep the picker's active-row highlight in sync if the menu is built.
+    if (state.dom.themeMenu) {
+        state.dom.themeMenu.querySelectorAll('.im_theme_item').forEach((el) => {
+            el.classList.toggle('is-active', el.dataset.theme === id);
+        });
+    }
+}
+
+/** Apply the current theme attribute to an arbitrary element (used for both the
+ *  main panel and the viewer popup so they stay visually consistent). */
+function applyThemeTo(el) {
+    if (!el) return;
+    const id = state.theme || DEFAULT_THEME;
+    if (id === 'adaptive') el.removeAttribute('data-im-theme');
+    else el.setAttribute('data-im-theme', id);
+}
+
+/** Build the theme picker dropdown rows once. */
+function buildThemeMenu() {
+    const menu = state.dom.themeMenu;
+    if (!menu) return;
+    menu.innerHTML = '';
+    for (const theme of THEMES) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'im_theme_item';
+        btn.dataset.theme = theme.id;
+        if (theme.id === (state.theme || DEFAULT_THEME)) btn.classList.add('is-active');
+
+        const swatch = document.createElement('span');
+        swatch.className = 'im_theme_swatch';
+        swatch.style.setProperty('--sw-accent', theme.accent);
+        swatch.style.setProperty('--sw-bg', theme.bg);
+
+        const label = document.createElement('span');
+        label.className = 'im_theme_label';
+        label.textContent = t(theme.i18n);
+
+        btn.appendChild(swatch);
+        btn.appendChild(label);
+        btn.addEventListener('click', () => {
+            setTheme(theme.id);
+            closeThemeMenu();
+        });
+        menu.appendChild(btn);
+    }
+}
+
+function setTheme(id) {
+    state.theme = THEME_IDS.includes(id) ? id : DEFAULT_THEME;
+    saveTheme(state.theme);
+    applyTheme();
+}
+
+function toggleThemeMenu() {
+    const menu = state.dom.themeMenu;
+    if (!menu) return;
+    if (menu.classList.contains('im_hidden')) openThemeMenu();
+    else closeThemeMenu();
+}
+
+function openThemeMenu() {
+    const menu = state.dom.themeMenu;
+    if (!menu) return;
+    buildThemeMenu(); // rebuild so the active row reflects the current theme
+    menu.classList.remove('im_hidden');
+    // Close on the next outside click.
+    setTimeout(() => document.addEventListener('click', onThemeOutsideClick, true), 0);
+}
+
+function closeThemeMenu() {
+    state.dom.themeMenu?.classList.add('im_hidden');
+    document.removeEventListener('click', onThemeOutsideClick, true);
+}
+
+function onThemeOutsideClick(e) {
+    const wrap = state.dom.themeToggle?.closest('.im_theme_wrap');
+    if (wrap && !wrap.contains(e.target)) closeThemeMenu();
 }
 
 /** Push the desktop sidebar width / collapsed state onto the DOM. The CSS only
@@ -1545,6 +1665,7 @@ async function viewImage(img) {
 
     const wrap = document.createElement('div');
     wrap.className = 'im_view_wrap';
+    applyThemeTo(wrap);   // match the manager's chosen colour theme
     wrap.innerHTML = `
         <div class="im_view_stage">
             <button type="button" class="im_view_nav im_view_prev" data-nav="prev" title="${escapeHtml(t('viewer.prev'))}" aria-label="${escapeHtml(t('viewer.prev'))}"><i class="fa-solid fa-chevron-left"></i></button>
@@ -1725,6 +1846,14 @@ async function viewImage(img) {
     try {
         const popup = new c.Popup(wrap, c.POPUP_TYPE.DISPLAY, '', { large: true, wide: true, allowVerticalScrolling: true });
         popupRef = popup;
+        // Tag the popup shell so our CSS can make its body a full-height flex
+        // column — that's what lets the image + action bar sit centred in the
+        // popup instead of clinging to the top.
+        try {
+            const shell = popup.dlg || wrap.closest('.popup') || wrap.closest('dialog');
+            shell?.classList.add('im_view_popup');
+            applyThemeTo(shell);
+        } catch (e) { /* non-fatal: just lose the perfect centring */ }
         await popup.show();
     } catch (error) {
         // Fallback: open in new tab
@@ -1845,6 +1974,7 @@ function openManager() {
     applyMode();   // centered modal vs floating window
     applyCols();   // restore the chosen mobile cards-per-row
     applySidebarSize(); // restore desktop sidebar width / collapsed state
+    applyTheme();  // restore the chosen manager colour theme
     updateSidebarLabel();
     loadAll();
 }
@@ -1905,6 +2035,8 @@ async function injectUI() {
         pageSize: $('im_page_size'),
         showHidden: $('im_show_hidden'),
         refresh: $('im_refresh'),
+        themeToggle: $('im_theme_toggle'),
+        themeMenu: $('im_theme_menu'),
         floatToggle: $('im_float_toggle'),
         floatLabel: document.querySelector('#im_float_toggle .im_float_label'),
         colsToggle: $('im_cols_toggle'),
@@ -1936,6 +2068,13 @@ function bindEvents() {
         state.sizeCache.clear();
         loadAll();
     });
+
+    // Theme palette: open the picker; choosing a row re-skins the manager.
+    d.themeToggle?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleThemeMenu();
+    });
+    buildThemeMenu();
 
     d.search?.addEventListener('input', () => {
         state.search = d.search.value;
@@ -2101,6 +2240,8 @@ async function init() {
     state.sidebarWidth = loadSidebarWidth();
     state.sidebarCollapsed = loadSidebarCollapsed();
     applySidebarSize();
+    state.theme = loadTheme();
+    applyTheme();
 
     // The wand container may not exist yet at load — retry a few times.
     if (!addWandButton()) {

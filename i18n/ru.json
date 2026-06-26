@@ -7,7 +7,18 @@
   "header.center": "По центру",
   "header.floatTitle": "Переключить плавающее перемещаемое окно",
   "header.refreshTitle": "Пересканировать все папки",
+  "header.themeTitle": "Тема менеджера",
   "header.closeTitle": "Закрыть",
+
+  "theme.adaptive": "Адаптивная (SillyTavern)",
+  "theme.amoled": "AMOLED",
+  "theme.brown": "Коричневая",
+  "theme.blue": "Синяя",
+  "theme.dracula": "Dracula",
+  "theme.pink": "Розовая",
+  "theme.green": "Зелёная",
+  "theme.purple": "Фиолетовая",
+  "theme.light": "Светлая",
 
   "select.count": "Выбрано: {{count}}",
   "select.page": "Страница",
