@@ -156,7 +156,6 @@ const THEMES = Object.freeze([
     { id: 'pink',     i18n: 'theme.pink',     accent: '#ff79c6', bg: '#2e1722' },
     { id: 'green',    i18n: 'theme.green',    accent: '#50fa7b', bg: '#122019' },
     { id: 'purple',   i18n: 'theme.purple',   accent: '#b388ff', bg: '#1e152e' },
-    { id: 'light',    i18n: 'theme.light',    accent: '#2563eb', bg: '#f4f4f7' },
 ]);
 const DEFAULT_THEME = 'adaptive';
 const THEME_IDS = THEMES.map(t => t.id);
