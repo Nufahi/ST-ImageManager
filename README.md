@@ -24,6 +24,11 @@ out old images fast.
   before you confirm.
 - **Hide** — hide images you don't want cluttering the manager without
   deleting the files. Toggle "Show hidden" to see them again.
+- **Recycle bin** — send images to a soft trash instead of deleting them
+  outright (per-image, bulk, or from the viewer). Files stay on disk, so you
+  can restore them later or empty the bin to remove them for good. Optional
+  auto-clean purges trashed items older than 7/14/30/90 days. The trashed list
+  lives in the extension settings, not on the server.
 - **View** — tap an image to open it full size (images and videos).
 - **Search & sort** — filter by file name, sort by date or name.
 - **Mobile friendly** — full-screen layout, collapsible folder list, native

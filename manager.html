@@ -50,6 +50,14 @@
                 <i class="fa-solid fa-eye-slash"></i>
                 <span data-i18n="select.hide">Hide</span>
             </button>
+            <button id="im_bulk_trash" type="button" class="menu_button menu_button_icon interactable" data-i18n-title="select.trashTitle" title="Move selected to the recycle bin (files stay on disk)">
+                <i class="fa-solid fa-trash-arrow-up"></i>
+                <span data-i18n="select.trash">Trash</span>
+            </button>
+            <button id="im_bulk_restore" type="button" class="menu_button menu_button_icon interactable im_hidden" data-i18n-title="select.restoreTitle" title="Restore selected from the recycle bin">
+                <i class="fa-solid fa-rotate-left"></i>
+                <span data-i18n="select.restore">Restore</span>
+            </button>
             <button id="im_bulk_delete" type="button" class="menu_button menu_button_icon interactable im_btn_danger" data-i18n-title="select.deleteTitle" title="Permanently delete selected files from the server">
                 <i class="fa-solid fa-trash-can"></i>
                 <span data-i18n="select.delete">Delete</span>
@@ -112,6 +120,21 @@
                 <div class="im_main_header">
                     <div id="im_breadcrumb" class="im_breadcrumb"></div>
                     <div class="im_main_header_actions">
+                        <!-- Trash-only controls: auto-clean retention + empty bin.
+                             Hidden unless the recycle bin view is active. -->
+                        <div id="im_trash_controls" class="im_trash_controls im_hidden">
+                            <select id="im_trash_retention" class="text_pole textarea_compact" data-i18n-title="trash.retentionTitle" title="Auto-delete trashed items older than">
+                                <option value="0" data-i18n="trash.retention.never">Keep forever</option>
+                                <option value="7" data-i18n="trash.retention.7">7 days</option>
+                                <option value="14" data-i18n="trash.retention.14">14 days</option>
+                                <option value="30" data-i18n="trash.retention.30">30 days</option>
+                                <option value="90" data-i18n="trash.retention.90">90 days</option>
+                            </select>
+                            <button id="im_empty_trash" type="button" class="menu_button menu_button_icon interactable im_btn_danger" data-i18n-title="trash.emptyTitle" title="Permanently delete everything in the recycle bin">
+                                <i class="fa-solid fa-fire"></i>
+                                <span data-i18n="trash.empty">Empty</span>
+                            </button>
+                        </div>
                         <div id="im_summary" class="im_summary"></div>
                         <div class="im_page_controls">
                             <button id="im_prev_page" type="button" class="menu_button menu_button_icon interactable" data-i18n-title="page.prevTitle" title="Previous page"><i class="fa-solid fa-chevron-left"></i></button>

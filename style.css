@@ -1388,6 +1388,35 @@ body.im_modal_open {
     }
 }
 
+/* ---------- Recycle bin ----------
+ * The trash folder entry in the sidebar gets a subtle reddish tint so it reads
+ * as a "danger / cleanup" destination, and the trash-only header controls
+ * (retention selector + Empty button) line up next to the page controls. */
+.im_folder_item[data-folder="__trash__"] i {
+    color: var(--fullred, #c0392b);
+    opacity: 0.85;
+}
+
+.im_folder_item[data-folder="__trash__"].is-active {
+    background: rgba(192, 57, 43, 0.28);
+}
+
+.im_trash_controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.im_trash_controls select {
+    max-width: 130px;
+}
+
+/* The viewer's "move to trash" / "restore" tools share the round tool look but
+   get their own hover accents so the destructive vs. restorative intent reads. */
+.im_view_restore:hover {
+    color: var(--SmartThemeQuoteColor, #6a9cff);
+}
+
 /* Narrow phones: honour the chosen column count, just with tighter gaps to
    save width. */
 @media (max-width: 480px) {

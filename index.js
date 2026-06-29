@@ -123,6 +123,11 @@ function i18nApplyDom(root) {
 }
 const ROOT_FOLDER = '__root__'; // images that live directly in /user/images
 const ALL_FOLDERS = '__all__';
+const TRASH_FOLDER = '__trash__'; // virtual view: images soft-deleted into the trash
+
+// Trash auto-clean retention options (days). 0 = keep forever (manual only).
+const TRASH_RETENTION_OPTIONS = Object.freeze([0, 7, 14, 30, 90]);
+const DEFAULT_TRASH_RETENTION = 0;
 
 const PAGE_SIZE_OPTIONS = Object.freeze([10, 20, 30, 60, 120, 240]);
 
@@ -171,6 +176,11 @@ const DEFAULT_SETTINGS = Object.freeze({
     pageSize: 60,
     showHidden: false,
     hidden: [], // list of user-relative paths the user has chosen to hide
+    // Soft "Recycle bin". Items are not removed from disk — their paths are
+    // parked here with the moment they were trashed (ms epoch) so the user can
+    // restore them or purge them for good later. Auto-clean (by age) is opt-in.
+    trash: [], // [{ path: string, date: number }]
+    trashRetentionDays: DEFAULT_TRASH_RETENTION, // 0 = keep forever (manual purge only)
 });
 
 /* ============================================================
@@ -277,6 +287,21 @@ function getSettings() {
     if (typeof s.sort !== 'string') s.sort = DEFAULT_SETTINGS.sort;
     if (!Array.isArray(s.hidden)) s.hidden = [];
     if (typeof s.showHidden !== 'boolean') s.showHidden = false;
+    // Trash: normalise to an array of { path, date } records. Tolerate legacy
+    // shapes (plain string paths) by promoting them to dated records.
+    if (!Array.isArray(s.trash)) s.trash = [];
+    s.trash = s.trash
+        .map((entry) => {
+            if (typeof entry === 'string') return { path: entry, date: Date.now() };
+            if (entry && typeof entry.path === 'string') {
+                return { path: entry.path, date: Number(entry.date) || Date.now() };
+            }
+            return null;
+        })
+        .filter(Boolean);
+    if (!TRASH_RETENTION_OPTIONS.includes(Number(s.trashRetentionDays))) {
+        s.trashRetentionDays = DEFAULT_TRASH_RETENTION;
+    }
     return s;
 }
 
@@ -286,6 +311,63 @@ function saveSettings() {
 
 function getHiddenSet() {
     return new Set(getSettings().hidden);
+}
+
+/* ---------- Trash (soft recycle bin) ----------
+ * The trash is a list of { path, date } records in settings. Files are NOT
+ * touched on disk — they're just hidden from every normal view and gathered
+ * into the dedicated "Trash" folder, where they can be restored or purged for
+ * good. A path can never be both hidden and trashed; trashing wins. */
+function getTrashSet() {
+    return new Set(getSettings().trash.map(e => e.path));
+}
+
+/** Move a set of paths into the trash (records the current time). Also drops
+ *  them from the hidden list so an item is never in two states at once. */
+function addPathsToTrash(paths) {
+    const s = getSettings();
+    const existing = new Set(s.trash.map(e => e.path));
+    const now = Date.now();
+    let added = 0;
+    for (const p of paths) {
+        if (existing.has(p)) continue;
+        s.trash.push({ path: p, date: now });
+        existing.add(p);
+        added++;
+    }
+    // A trashed item shouldn't also count as merely "hidden".
+    const trashedSet = existing;
+    s.hidden = s.hidden.filter(p => !trashedSet.has(p));
+    saveSettings();
+    return added;
+}
+
+/** Restore paths from the trash back to their normal (visible) state. */
+function restorePathsFromTrash(paths) {
+    const s = getSettings();
+    const drop = new Set(paths);
+    const before = s.trash.length;
+    s.trash = s.trash.filter(e => !drop.has(e.path));
+    saveSettings();
+    return before - s.trash.length;
+}
+
+/** Remove paths from the trash list (used after a permanent delete). */
+function dropPathsFromTrash(paths) {
+    const s = getSettings();
+    const drop = new Set(paths);
+    s.trash = s.trash.filter(e => !drop.has(e.path));
+    saveSettings();
+}
+
+/** Auto-clean: collect trashed paths older than the retention window. Returns
+ *  the expired paths (empty when retention is 0 / "keep forever"). */
+function getExpiredTrashPaths() {
+    const s = getSettings();
+    const days = Number(s.trashRetentionDays) || 0;
+    if (days <= 0) return [];
+    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+    return s.trash.filter(e => e.date < cutoff).map(e => e.path);
 }
 
 /* ---------- device-local UI preferences (localStorage) ---------- */
@@ -833,6 +915,10 @@ async function loadAll() {
 
     // Kick off lazy size fetching for visible page
     queueVisibleSizes();
+
+    // Opt-in: purge trashed items older than the retention window (no-op when
+    // retention is "keep forever"). Runs in the background.
+    autoCleanTrash();
 }
 
 /* ============================================================
@@ -936,15 +1022,25 @@ function dateSortKey(img) {
 
 function getFilteredImages() {
     const hidden = getHiddenSet();
+    const trashed = getTrashSet();
     const search = state.search.trim().toLowerCase();
+    const trashView = state.activeFolder === TRASH_FOLDER;
 
     let list = state.images.filter((img) => {
-        if (state.activeFolder !== ALL_FOLDERS && img.folder !== state.activeFolder) return false;
-        // The "show hidden" toggle is an exclusive view switch:
-        //   off -> show ONLY normal (non-hidden) images
-        //   on  -> show ONLY hidden images
-        const isHidden = hidden.has(img.path);
-        if (state.showHidden ? !isHidden : isHidden) return false;
+        const isTrashedImg = trashed.has(img.path);
+        // The Trash view shows ONLY trashed images (across every folder); every
+        // other view excludes them entirely.
+        if (trashView) {
+            if (!isTrashedImg) return false;
+        } else {
+            if (isTrashedImg) return false;
+            if (state.activeFolder !== ALL_FOLDERS && img.folder !== state.activeFolder) return false;
+            // The "show hidden" toggle is an exclusive view switch:
+            //   off -> show ONLY normal (non-hidden) images
+            //   on  -> show ONLY hidden images
+            const isHidden = hidden.has(img.path);
+            if (state.showHidden ? !isHidden : isHidden) return false;
+        }
         if (search && !img.file.toLowerCase().includes(search)) return false;
         return true;
     });
@@ -1012,6 +1108,7 @@ function render() {
     renderGrid();
     renderPageControls();
     renderSelectBar();
+    renderTrashControls();
     updateStorageSummary();
 }
 
@@ -1024,8 +1121,12 @@ function renderFolders() {
     const list = state.dom.folderList;
     if (!list) return;
     const hidden = getHiddenSet();
+    const trashed = getTrashSet();
 
     const countFor = (folderName) => state.images.filter((img) => {
+        const isTrashedImg = trashed.has(img.path);
+        if (folderName === TRASH_FOLDER) return isTrashedImg;
+        if (isTrashedImg) return false; // trashed items never show in normal folders
         if (folderName !== ALL_FOLDERS && img.folder !== folderName) return false;
         // Match the exclusive view switch used in getFilteredImages().
         const isHidden = hidden.has(img.path);
@@ -1041,6 +1142,8 @@ function renderFolders() {
             icon: 'fa-folder',
         });
     }
+    // The recycle bin sits at the bottom of the folder list.
+    entries.push({ name: TRASH_FOLDER, label: t('folder.trash'), icon: 'fa-trash-can' });
 
     list.innerHTML = entries.map((e) => {
         const active = e.name === state.activeFolder ? ' is-active' : '';
@@ -1072,9 +1175,15 @@ function selectFolder(folderName) {
 
 function updateSidebarLabel() {
     if (!state.dom.sidebarToggleLabel) return;
-    const f = state.activeFolder;
-    state.dom.sidebarToggleLabel.textContent =
-        f === ALL_FOLDERS ? t('folder.all') : (f === ROOT_FOLDER ? t('folder.root') : f);
+    state.dom.sidebarToggleLabel.textContent = folderLabel(state.activeFolder);
+}
+
+/** Human label for a folder id (handles the synthetic All/root/trash views). */
+function folderLabel(f) {
+    if (f === ALL_FOLDERS) return t('folder.all');
+    if (f === ROOT_FOLDER) return t('folder.root');
+    if (f === TRASH_FOLDER) return t('folder.trash');
+    return f;
 }
 
 function collapseSidebarOnMobile() {
@@ -1086,7 +1195,16 @@ function collapseSidebarOnMobile() {
 function renderBreadcrumb() {
     if (!state.dom.breadcrumb) return;
     const f = state.activeFolder;
-    const label = f === ALL_FOLDERS ? t('folder.all') : (f === ROOT_FOLDER ? t('folder.root') : f);
+    const label = folderLabel(f);
+
+    if (f === TRASH_FOLDER) {
+        // The trash view gets its own icon + a quiet hint explaining that items
+        // here are NOT yet removed from disk (they still take up space).
+        state.dom.breadcrumb.innerHTML =
+            `<i class="fa-solid fa-trash-can"></i> ${escapeHtml(label)} `
+            + `<i class="fa-solid fa-circle-info im_folder_hint" title="${escapeHtml(t('breadcrumb.trashHint'))}"></i>`;
+        return;
+    }
 
     // SillyTavern stores images in /user/images/<character name>/. Characters
     // that share the same name therefore share ONE folder on disk — the server
@@ -1098,6 +1216,11 @@ function renderBreadcrumb() {
 
     state.dom.breadcrumb.innerHTML =
         `<i class="fa-solid fa-folder-open"></i> ${escapeHtml(label)}${sharedHint}`;
+}
+
+/** True while the user is viewing the recycle bin. */
+function inTrashView() {
+    return state.activeFolder === TRASH_FOLDER;
 }
 
 /* ---------- Lazy media loading (IntersectionObserver) ----------
@@ -1164,11 +1287,22 @@ function cardHtml(img, hidden) {
     const media = img.isVideo
         ? `<video class="im_card_media" data-src="${escapeHtml(img.url)}" preload="none" muted></video>`
         : `<img class="im_card_media" data-src="${escapeHtml(img.url)}" alt="">`;
-    // In the "All images" view each card shows which folder (= character) the
-    // image belongs to. The tag is clickable: it jumps the view to that folder.
-    const folderTag = state.activeFolder === ALL_FOLDERS
+    // In the "All images" / Trash view each card shows which folder (= character)
+    // the image belongs to. The tag is clickable: it jumps the view to that
+    // folder. In the trash view it's informational only (clicking still works).
+    const folderTag = (state.activeFolder === ALL_FOLDERS || inTrashView())
         ? `<button type="button" class="im_card_folder" data-folder="${escapeHtml(img.folder)}" title="${escapeHtml(t('card.openFolder', { folder: img.folderLabel }))}"><i class="fa-solid fa-folder"></i> ${escapeHtml(img.folderLabel)}</button>`
         : '';
+
+    // The action buttons differ in the trash view: there you restore an item or
+    // delete it for good, instead of hiding / trashing it.
+    const actions = inTrashView()
+        ? `<button type="button" class="im_card_btn" data-act="restore" title="${escapeHtml(t('card.restoreTitle'))}"><i class="fa-solid fa-rotate-left"></i></button>
+                <button type="button" class="im_card_btn im_card_btn_danger" data-act="purge" title="${escapeHtml(t('card.purgeTitle'))}"><i class="fa-solid fa-fire"></i></button>`
+        : `<button type="button" class="im_card_btn" data-act="hide" title="${escapeHtml(hidden.has(img.path) ? t('card.unhideTitle') : t('card.hideTitle'))}"><i class="fa-solid ${hidden.has(img.path) ? 'fa-eye' : 'fa-eye-slash'}"></i></button>
+                <button type="button" class="im_card_btn" data-act="trash" title="${escapeHtml(t('card.trashTitle'))}"><i class="fa-solid fa-trash-arrow-up"></i></button>
+                <button type="button" class="im_card_btn im_card_btn_danger" data-act="delete" title="${escapeHtml(t('card.deleteTitle'))}"><i class="fa-solid fa-trash-can"></i></button>`;
+
     return `<div class="im_card${selected}${isHidden}" data-path="${escapeHtml(img.path)}">
         <div class="im_card_thumb">
             ${media}
@@ -1177,8 +1311,7 @@ function cardHtml(img, hidden) {
             </label>
             ${img.isVideo ? '<span class="im_card_badge"><i class="fa-solid fa-film"></i></span>' : ''}
             <div class="im_card_actions">
-                <button type="button" class="im_card_btn" data-act="hide" title="${escapeHtml(hidden.has(img.path) ? t('card.unhideTitle') : t('card.hideTitle'))}"><i class="fa-solid ${hidden.has(img.path) ? 'fa-eye' : 'fa-eye-slash'}"></i></button>
-                <button type="button" class="im_card_btn im_card_btn_danger" data-act="delete" title="${escapeHtml(t('card.deleteTitle'))}"><i class="fa-solid fa-trash-can"></i></button>
+                ${actions}
             </div>
         </div>
         <div class="im_card_meta">
@@ -1237,6 +1370,9 @@ function wireCard(card) {
             e.stopPropagation();
             const act = btn.dataset.act;
             if (act === 'hide') toggleHide(path);
+            else if (act === 'trash') trashOne(img);
+            else if (act === 'restore') restoreOne(img);
+            else if (act === 'purge') purgeOne(img);
             else if (act === 'delete') deleteOne(img);
         });
     });
@@ -1347,6 +1483,25 @@ function renderSelectBar() {
             ? `~${humanSize(known)}${unknown ? ' +?' : ''}`
             : '';
     }
+
+    // Context-sensitive selection actions:
+    //   normal view -> Hide + Trash, Delete = permanent delete
+    //   trash view  -> Restore, Delete = permanent purge (Hide/Trash hidden)
+    const trash = inTrashView();
+    state.dom.bulkHide?.classList.toggle('im_hidden', trash);
+    state.dom.bulkTrash?.classList.toggle('im_hidden', trash);
+    state.dom.bulkRestore?.classList.toggle('im_hidden', !trash);
+}
+
+/** Show the trash-only header controls (retention + empty) only in the bin. */
+function renderTrashControls() {
+    const wrap = state.dom.trashControls;
+    if (!wrap) return;
+    const trash = inTrashView();
+    wrap.classList.toggle('im_hidden', !trash);
+    if (trash && state.dom.trashRetention) {
+        state.dom.trashRetention.value = String(getSettings().trashRetentionDays || 0);
+    }
 }
 
 function updateStorageSummary() {
@@ -1430,6 +1585,150 @@ function toggleHide(path) {
     state.selected.delete(path);
     render();
     queueVisibleSizes();
+}
+
+/* ---------- Trash actions ----------
+ * Moving to / restoring from the trash never touches the file on disk — only
+ * the settings list. Permanent deletion ("purge") is the one that calls the
+ * server delete API. All of these refresh the grid + sizes afterwards. */
+
+/** Move a single image into the recycle bin. */
+function trashOne(img) {
+    if (!img) return;
+    addPathsToTrash([img.path]);
+    state.selected.delete(img.path);
+    toastr.info(t('toast.trashed.one'));
+    render();
+    queueVisibleSizes();
+}
+
+/** Restore a single image from the recycle bin. */
+function restoreOne(img) {
+    if (!img) return;
+    restorePathsFromTrash([img.path]);
+    state.selected.delete(img.path);
+    toastr.success(t('toast.restored.one'));
+    render();
+    queueVisibleSizes();
+}
+
+/** Permanently delete a single image that is currently in the trash. */
+async function purgeOne(img) {
+    if (!img) return;
+    const c = ctx();
+    const confirmed = await c.Popup.show.confirm(
+        t('toast.purgeConfirm.titleOne'),
+        `${escapeHtml(img.file)}<br><small>${escapeHtml(t('toast.deleteConfirm.bodyOne'))}</small>`,
+    );
+    if (!confirmed) return;
+    const ok = await apiDeleteImage(img.path);
+    if (ok) {
+        dropPathsFromTrash([img.path]);
+        removeImageFromState(img.path);
+        toastr.success(t('toast.deleted.one'));
+        render();
+        queueVisibleSizes();
+    } else {
+        toastr.error(t('toast.deleteFailed'));
+    }
+}
+
+/** Move the current selection into the recycle bin. */
+function bulkTrash() {
+    if (!state.selected.size) return;
+    const added = addPathsToTrash([...state.selected]);
+    toastr.info(t('toast.trashed.many', { count: added }));
+    state.selected.clear();
+    render();
+    queueVisibleSizes();
+}
+
+/** Restore the current selection from the recycle bin. */
+function bulkRestore() {
+    if (!state.selected.size) return;
+    const n = restorePathsFromTrash([...state.selected]);
+    toastr.success(t('toast.restored.many', { count: n }));
+    state.selected.clear();
+    render();
+    queueVisibleSizes();
+}
+
+/** Empty the entire recycle bin (permanently delete every trashed file). */
+async function emptyTrash() {
+    const trashPaths = getSettings().trash.map(e => e.path);
+    if (!trashPaths.length) return;
+    const c = ctx();
+    let knownSize = 0;
+    for (const p of trashPaths) {
+        const s = state.sizeCache.get(p);
+        if (s != null) knownSize += s;
+    }
+    const sizeNote = knownSize > 0
+        ? `<br><small>${escapeHtml(t('toast.deleteConfirm.frees', { size: humanSize(knownSize) }))}</small>`
+        : '';
+    const confirmed = await c.Popup.show.confirm(
+        t('toast.emptyConfirm.title', { count: trashPaths.length }),
+        `${escapeHtml(t('toast.emptyConfirm.body'))}${sizeNote}`,
+    );
+    if (!confirmed) return;
+    await purgePaths(trashPaths);
+}
+
+/** Permanently delete the selected items that are in the trash. */
+async function bulkPurgeSelected() {
+    if (!state.selected.size) return;
+    const c = ctx();
+    const paths = [...state.selected];
+    const confirmed = await c.Popup.show.confirm(
+        t('toast.purgeConfirm.titleMany', { count: paths.length }),
+        t('toast.deleteConfirm.bodyMany'),
+    );
+    if (!confirmed) return;
+    await purgePaths(paths);
+}
+
+/** Shared worker: delete the given paths from the server, then drop them from
+ *  the trash list + in-memory state. Used by Empty-trash and bulk purge. */
+async function purgePaths(paths) {
+    let success = 0;
+    let failed = 0;
+    toastr.info(t('toast.deleting', { count: paths.length }));
+    for (const path of paths) {
+        const ok = await apiDeleteImage(path);
+        if (ok) {
+            dropPathsFromTrash([path]);
+            removeImageFromState(path);
+            success++;
+        } else {
+            failed++;
+        }
+    }
+    state.selected.clear();
+    render();
+    queueVisibleSizes();
+    if (failed) toastr.warning(t('toast.deletePartial', { success, failed }));
+    else toastr.success(t('toast.deleted.many', { count: success }));
+}
+
+/** On open, auto-purge trashed items older than the retention window (opt-in;
+ *  no-op when retention is 0). Runs quietly in the background. */
+async function autoCleanTrash() {
+    const expired = getExpiredTrashPaths();
+    if (!expired.length) return;
+    let purged = 0;
+    for (const path of expired) {
+        const ok = await apiDeleteImage(path);
+        if (ok) {
+            dropPathsFromTrash([path]);
+            removeImageFromState(path);
+            purged++;
+        }
+    }
+    if (purged) {
+        toastr.info(t('toast.autoCleaned', { count: purged }));
+        render();
+        queueVisibleSizes();
+    }
 }
 
 /* ── Minimal ZIP writer (STORE method, no external dependency) ──
@@ -1679,7 +1978,10 @@ async function viewImage(img) {
                 <i class="fa-regular fa-square im_view_check_icon"></i>
             </label>
             <button type="button" class="im_view_tool im_view_download" title="${escapeHtml(t('viewer.download'))}" aria-label="${escapeHtml(t('viewer.download'))}"><i class="fa-solid fa-download"></i></button>
-            <button type="button" class="im_view_tool im_view_delete" title="${escapeHtml(t('viewer.delete'))}" aria-label="${escapeHtml(t('viewer.delete'))}"><i class="fa-solid fa-trash-can"></i></button>
+            ${inTrashView()
+                ? `<button type="button" class="im_view_tool im_view_restore" title="${escapeHtml(t('viewer.restore'))}" aria-label="${escapeHtml(t('viewer.restore'))}"><i class="fa-solid fa-rotate-left"></i></button>`
+                : `<button type="button" class="im_view_tool im_view_trash" title="${escapeHtml(t('viewer.trash'))}" aria-label="${escapeHtml(t('viewer.trash'))}"><i class="fa-solid fa-trash-arrow-up"></i></button>`}
+            <button type="button" class="im_view_tool im_view_delete" title="${escapeHtml(inTrashView() ? t('viewer.purge') : t('viewer.delete'))}" aria-label="${escapeHtml(inTrashView() ? t('viewer.purge') : t('viewer.delete'))}"><i class="fa-solid ${inTrashView() ? 'fa-fire' : 'fa-trash-can'}"></i></button>
         </div>`;
 
     const mediaWrap = wrap.querySelector('.im_view_media_wrap');
@@ -1691,8 +1993,22 @@ async function viewImage(img) {
     const checkIcon = wrap.querySelector('.im_view_check_icon');
     const downloadBtn = wrap.querySelector('.im_view_download');
     const deleteBtn = wrap.querySelector('.im_view_delete');
+    const trashBtn = wrap.querySelector('.im_view_trash');
+    const restoreBtn = wrap.querySelector('.im_view_restore');
 
     let popupRef = null;
+
+    // Drop the item at the current index from the viewer's navigation list and
+    // either advance to the next image or close the viewer if it was the last.
+    const advanceAfterRemoval = () => {
+        list.splice(index, 1);
+        if (!list.length) {
+            try { popupRef?.completeCancelled?.(); } catch (err) { /* ignore */ }
+            return;
+        }
+        if (index >= list.length) index = list.length - 1;
+        renderViewer();
+    };
 
     // Reflect the current image's selected state in the bottom toolbar checkbox.
     const syncToolbar = () => {
@@ -1775,37 +2091,59 @@ async function viewImage(img) {
         }
     });
 
+    // Trash: move ONLY the currently-viewed file into the recycle bin (normal
+    // views only). The viewer then advances to the next image / closes.
+    trashBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const cur = list[index];
+        if (!cur) return;
+        addPathsToTrash([cur.path]);
+        state.selected.delete(cur.path);
+        toastr.info(t('toast.trashed.one'));
+        render();
+        queueVisibleSizes();
+        advanceAfterRemoval();
+    });
+
+    // Restore: pull ONLY the currently-viewed file back out of the recycle bin
+    // (trash view only). It leaves this (trash) view, so advance / close.
+    restoreBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const cur = list[index];
+        if (!cur) return;
+        restorePathsFromTrash([cur.path]);
+        state.selected.delete(cur.path);
+        toastr.success(t('toast.restored.one'));
+        render();
+        queueVisibleSizes();
+        advanceAfterRemoval();
+    });
+
     // Delete: remove ONLY the currently-viewed file (ignores the checkbox
-    // selection of other images). After deleting, the viewer advances to the
-    // next image, or closes if that was the last one.
+    // selection of other images). In the trash view this is a permanent purge.
+    // After deleting, the viewer advances to the next image, or closes if that
+    // was the last one.
     deleteBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         const cur = list[index];
         if (!cur) return;
+        const purging = inTrashView();
         const confirmed = await c.Popup.show.confirm(
-            t('toast.deleteConfirm.titleOne'),
+            purging ? t('toast.purgeConfirm.titleOne') : t('toast.deleteConfirm.titleOne'),
             `${escapeHtml(cur.file)}<br><small>${escapeHtml(t('toast.deleteConfirm.bodyOne'))}</small>`,
         );
         if (!confirmed) return;
         const ok = await apiDeleteImage(cur.path);
         if (!ok) { toastr.error(t('toast.deleteFailed')); return; }
 
+        if (purging) dropPathsFromTrash([cur.path]);
         removeImageFromState(cur.path);
         toastr.success(t('toast.deleted.one'));
         // Refresh the grid behind the viewer.
         render();
         queueVisibleSizes();
 
-        // Drop the deleted item from the viewer's own navigation list.
-        list.splice(index, 1);
-        if (!list.length) {
-            // Nothing left to show — close the viewer.
-            try { popupRef?.completeCancelled?.(); } catch (err) { /* ignore */ }
-            return;
-        }
-        // Stay on the same slot (now the next image), clamping at the end.
-        if (index >= list.length) index = list.length - 1;
-        renderViewer();
+        advanceAfterRemoval();
     });
 
     // Keyboard arrows while the viewer is open.
@@ -1931,12 +2269,18 @@ function removeImageFromState(path) {
     }
     state.selected.delete(path);
     state.sizeCache.delete(path);
-    // also drop from hidden list if present
+    // also drop from hidden / trash lists if present
     const s = getSettings();
+    let dirty = false;
     if (s.hidden.includes(path)) {
         s.hidden = s.hidden.filter(p => p !== path);
-        saveSettings();
+        dirty = true;
     }
+    if (s.trash.some(e => e.path === path)) {
+        s.trash = s.trash.filter(e => e.path !== path);
+        dirty = true;
+    }
+    if (dirty) saveSettings();
 }
 
 
@@ -2050,7 +2394,12 @@ async function injectUI() {
         deselectAll: $('im_deselect_all'),
         bulkDownload: $('im_bulk_download'),
         bulkHide: $('im_bulk_hide'),
+        bulkTrash: $('im_bulk_trash'),
+        bulkRestore: $('im_bulk_restore'),
         bulkDelete: $('im_bulk_delete'),
+        trashControls: $('im_trash_controls'),
+        trashRetention: $('im_trash_retention'),
+        emptyTrash: $('im_empty_trash'),
     };
 
     bindEvents();
@@ -2136,7 +2485,22 @@ function bindEvents() {
     d.deselectAll?.addEventListener('click', clearSelection);
     d.bulkDownload?.addEventListener('click', bulkDownload);
     d.bulkHide?.addEventListener('click', bulkHide);
-    d.bulkDelete?.addEventListener('click', bulkDelete);
+    d.bulkTrash?.addEventListener('click', bulkTrash);
+    d.bulkRestore?.addEventListener('click', bulkRestore);
+    // In the trash view, the Delete button purges the selection for good; in
+    // every other view it's the original permanent delete.
+    d.bulkDelete?.addEventListener('click', () => {
+        if (inTrashView()) bulkPurgeSelected();
+        else bulkDelete();
+    });
+    d.emptyTrash?.addEventListener('click', emptyTrash);
+    d.trashRetention?.addEventListener('change', () => {
+        const days = Number(d.trashRetention.value) || 0;
+        getSettings().trashRetentionDays = TRASH_RETENTION_OPTIONS.includes(days) ? days : 0;
+        saveSettings();
+        // Apply the new window immediately.
+        autoCleanTrash();
+    });
 
     d.sidebarToggle?.addEventListener('click', () => {
         d.sidebar?.classList.toggle('is-collapsed');
