@@ -212,6 +212,8 @@ const state = {
     sidebarWidth: SIDEBAR_DEFAULT_W, // desktop folder-sidebar width (px)
     sidebarCollapsed: false,         // desktop folder-sidebar collapsed?
     theme: DEFAULT_THEME,            // manager colour theme id
+    trashMigrated: false,            // legacy trash records normalised once?
+    autoCleaning: false,             // guard so trash auto-clean can't overlap
 };
 
 /* ============================================================
@@ -287,22 +289,45 @@ function getSettings() {
     if (typeof s.sort !== 'string') s.sort = DEFAULT_SETTINGS.sort;
     if (!Array.isArray(s.hidden)) s.hidden = [];
     if (typeof s.showHidden !== 'boolean') s.showHidden = false;
-    // Trash: normalise to an array of { path, date } records. Tolerate legacy
-    // shapes (plain string paths) by promoting them to dated records.
+    // Trash must always be an array, but we DON'T rebuild it on every call —
+    // getSettings() sits in hot render paths (filtering, folder counts, every
+    // card), so re-allocating the array + its records each time would add real
+    // CPU/GC pressure with a large bin. Migration of legacy shapes (plain
+    // string paths) happens once, lazily, via normalizeTrashOnce().
     if (!Array.isArray(s.trash)) s.trash = [];
-    s.trash = s.trash
-        .map((entry) => {
-            if (typeof entry === 'string') return { path: entry, date: Date.now() };
-            if (entry && typeof entry.path === 'string') {
-                return { path: entry.path, date: Number(entry.date) || Date.now() };
-            }
-            return null;
-        })
-        .filter(Boolean);
     if (!TRASH_RETENTION_OPTIONS.includes(Number(s.trashRetentionDays))) {
         s.trashRetentionDays = DEFAULT_TRASH_RETENTION;
     }
     return s;
+}
+
+/** One-time migration: coerce any legacy/odd trash entries into { path, date }
+ *  records. Runs at startup and is a no-op once the list is already clean, so
+ *  the per-call getSettings() can safely assume well-formed records. */
+function normalizeTrashOnce() {
+    const c = ctx();
+    const s = c.extensionSettings[SETTINGS_KEY];
+    if (!s || !Array.isArray(s.trash) || !s.trash.length) return;
+    let changed = false;
+    const cleaned = [];
+    for (const entry of s.trash) {
+        if (entry && typeof entry === 'object' && typeof entry.path === 'string'
+            && typeof entry.date === 'number') {
+            cleaned.push(entry);
+            continue;
+        }
+        changed = true;
+        if (typeof entry === 'string') {
+            cleaned.push({ path: entry, date: Date.now() });
+        } else if (entry && typeof entry.path === 'string') {
+            cleaned.push({ path: entry.path, date: Number(entry.date) || Date.now() });
+        }
+        // anything else is dropped (changed already flagged)
+    }
+    if (changed) {
+        s.trash = cleaned;
+        saveSettings();
+    }
 }
 
 function saveSettings() {
@@ -350,14 +375,6 @@ function restorePathsFromTrash(paths) {
     s.trash = s.trash.filter(e => !drop.has(e.path));
     saveSettings();
     return before - s.trash.length;
-}
-
-/** Remove paths from the trash list (used after a permanent delete). */
-function dropPathsFromTrash(paths) {
-    const s = getSettings();
-    const drop = new Set(paths);
-    s.trash = s.trash.filter(e => !drop.has(e.path));
-    saveSettings();
 }
 
 /** Auto-clean: collect trashed paths older than the retention window. Returns
@@ -1623,7 +1640,7 @@ async function purgeOne(img) {
     if (!confirmed) return;
     const ok = await apiDeleteImage(img.path);
     if (ok) {
-        dropPathsFromTrash([img.path]);
+        // removeImageFromState() also drops the path from the trash list.
         removeImageFromState(img.path);
         toastr.success(t('toast.deleted.one'));
         render();
@@ -1690,42 +1707,45 @@ async function bulkPurgeSelected() {
 /** Shared worker: delete the given paths from the server, then drop them from
  *  the trash list + in-memory state. Used by Empty-trash and bulk purge. */
 async function purgePaths(paths) {
-    let success = 0;
     let failed = 0;
+    const deleted = [];
     toastr.info(t('toast.deleting', { count: paths.length }));
     for (const path of paths) {
         const ok = await apiDeleteImage(path);
-        if (ok) {
-            dropPathsFromTrash([path]);
-            removeImageFromState(path);
-            success++;
-        } else {
-            failed++;
-        }
+        if (ok) deleted.push(path);
+        else failed++;
     }
+    // Apply all the bookkeeping in one pass (avoids O(N²) per-item filtering
+    // and N separate saveSettings() calls).
+    removeImagesFromState(deleted);
     state.selected.clear();
     render();
     queueVisibleSizes();
-    if (failed) toastr.warning(t('toast.deletePartial', { success, failed }));
-    else toastr.success(t('toast.deleted.many', { count: success }));
+    if (failed) toastr.warning(t('toast.deletePartial', { success: deleted.length, failed }));
+    else toastr.success(t('toast.deleted.many', { count: deleted.length }));
 }
 
 /** On open, auto-purge trashed items older than the retention window (opt-in;
- *  no-op when retention is 0). Runs quietly in the background. */
+ *  no-op when retention is 0). Runs quietly in the background. A re-entry guard
+ *  stops overlapping runs (e.g. opening + changing retention quickly) from
+ *  firing duplicate DELETE requests for the same files. */
 async function autoCleanTrash() {
+    if (state.autoCleaning) return;
     const expired = getExpiredTrashPaths();
     if (!expired.length) return;
-    let purged = 0;
-    for (const path of expired) {
-        const ok = await apiDeleteImage(path);
-        if (ok) {
-            dropPathsFromTrash([path]);
-            removeImageFromState(path);
-            purged++;
+    state.autoCleaning = true;
+    const deleted = [];
+    try {
+        for (const path of expired) {
+            const ok = await apiDeleteImage(path);
+            if (ok) deleted.push(path);
         }
+    } finally {
+        state.autoCleaning = false;
     }
-    if (purged) {
-        toastr.info(t('toast.autoCleaned', { count: purged }));
+    if (deleted.length) {
+        removeImagesFromState(deleted);
+        toastr.info(t('toast.autoCleaned', { count: deleted.length }));
         render();
         queueVisibleSizes();
     }
@@ -2136,7 +2156,8 @@ async function viewImage(img) {
         const ok = await apiDeleteImage(cur.path);
         if (!ok) { toastr.error(t('toast.deleteFailed')); return; }
 
-        if (purging) dropPathsFromTrash([cur.path]);
+        // removeImageFromState() also clears the trash record (so a purge from
+        // the bin view needs no extra step).
         removeImageFromState(cur.path);
         toastr.success(t('toast.deleted.one'));
         // Refresh the grid behind the viewer.
@@ -2239,47 +2260,56 @@ async function bulkDelete() {
     );
     if (!confirmed) return;
 
-    let success = 0;
     let failed = 0;
+    const deleted = [];
     toastr.info(t('toast.deleting', { count: paths.length }));
     for (const path of paths) {
-        const img = state.images.find(i => i.path === path);
-        const ok = await apiDeleteImage(img ? img.path : path);
-        if (ok) {
-            removeImageFromState(path);
-            success++;
-        } else {
-            failed++;
-        }
+        const ok = await apiDeleteImage(path);
+        if (ok) deleted.push(path);
+        else failed++;
     }
+    // Single-pass cleanup avoids an O(N²) freeze when deleting many files.
+    removeImagesFromState(deleted);
     state.selected.clear();
     render();
     queueVisibleSizes();
-    if (failed) toastr.warning(t('toast.deletePartial', { success, failed }));
-    else toastr.success(t('toast.deleted.many', { count: success }));
+    if (failed) toastr.warning(t('toast.deletePartial', { success: deleted.length, failed }));
+    else toastr.success(t('toast.deleted.many', { count: deleted.length }));
 }
 
 function removeImageFromState(path) {
-    state.images = state.images.filter(i => i.path !== path);
+    removeImagesFromState([path]);
+}
+
+/**
+ * Remove a batch of images from in-memory state + settings in a SINGLE pass.
+ * Removing one-by-one in a loop is O(N × images) (each call re-filters the
+ * whole image list and every folder's file list), which can freeze the UI when
+ * emptying a large recycle bin. This does it once: O(images + N).
+ */
+function removeImagesFromState(paths) {
+    if (!paths || !paths.length) return;
+    const drop = new Set(paths);
+
+    state.images = state.images.filter(i => !drop.has(i.path));
     for (const f of state.folders) {
-        f.files = f.files.filter((file) => {
-            const rawSeg = f.name === ROOT_FOLDER ? '' : `${f.name}/`;
-            return `user/images/${rawSeg}${file}` !== path;
-        });
+        const rawSeg = f.name === ROOT_FOLDER ? '' : `${f.name}/`;
+        f.files = f.files.filter(file => !drop.has(`user/images/${rawSeg}${file}`));
     }
-    state.selected.delete(path);
-    state.sizeCache.delete(path);
-    // also drop from hidden / trash lists if present
+    for (const p of drop) {
+        state.selected.delete(p);
+        state.sizeCache.delete(p);
+    }
+
+    // Drop from hidden / trash lists if present (one save at the end).
     const s = getSettings();
     let dirty = false;
-    if (s.hidden.includes(path)) {
-        s.hidden = s.hidden.filter(p => p !== path);
-        dirty = true;
-    }
-    if (s.trash.some(e => e.path === path)) {
-        s.trash = s.trash.filter(e => e.path !== path);
-        dirty = true;
-    }
+    const hiddenBefore = s.hidden.length;
+    s.hidden = s.hidden.filter(p => !drop.has(p));
+    if (s.hidden.length !== hiddenBefore) dirty = true;
+    const trashBefore = s.trash.length;
+    s.trash = s.trash.filter(e => !drop.has(e.path));
+    if (s.trash.length !== trashBefore) dirty = true;
     if (dirty) saveSettings();
 }
 
@@ -2302,6 +2332,13 @@ function extractTimestamp(filename) {
  * ============================================================ */
 function openManager() {
     if (!state.dom.modal) return;
+    // Migrate any legacy trash entries exactly once (settings are reliably
+    // available by the time the manager is opened). After this getSettings()
+    // can treat trash records as already well-formed in its hot paths.
+    if (!state.trashMigrated) {
+        normalizeTrashOnce();
+        state.trashMigrated = true;
+    }
     const s = getSettings();
     state.sort = s.sort;
     state.pageSize = s.pageSize;
