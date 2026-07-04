@@ -882,16 +882,18 @@ body.im_modal_open {
     height: 100%;
 }
 
-/* The stage holds the media flanked by the prev/next arrows. It grows to fill
- * the free vertical space so the image is centred between the popup's top edge
- * and the bottom action bar (instead of sitting at the very top). */
+/* The stage holds the media flanked by the prev/next arrows. It must NOT grow
+ * (flex: 0): the WRAP above centres the whole image+caption+toolbar block in
+ * the popup, and a non-growing stage keeps the caption and action bar glued
+ * right under the picture no matter its size (a growing stage used to swallow
+ * all the free space and push the buttons to the very bottom). */
 .im_view_stage {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
     width: 100%;
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-height: 0;
 }
 
@@ -901,6 +903,24 @@ body.im_modal_open {
     justify-content: center;
     flex: 1 1 auto;
     min-width: 0;
+    max-width: 100%;
+}
+
+/* While zoomed in the media gets an explicit size larger than the wrap, so the
+ * wrap becomes a scrollable viewport — drag/scroll to pan around the picture. */
+.im_view_media_wrap.is-zoomed {
+    overflow: auto;
+    /* Keep the pannable area within the popup so the toolbar stays reachable. */
+    max-height: 80vh;
+    align-items: flex-start;        /* let big media start at the top-left */
+    justify-content: flex-start;
+    -webkit-overflow-scrolling: touch;
+}
+
+.im_view_media_wrap.is-zoomed .im_view_media {
+    max-width: none;
+    max-height: none;
+    flex: 0 0 auto;
 }
 
 .im_view_media {
@@ -975,6 +995,47 @@ body.im_modal_open {
     transform: scale(1.08);
 }
 
+/* Zoom controls: [ − ] [ 100% ] [ + ] grouped on the left of the toolbar and
+ * visually separated from the per-image actions. The percentage between the
+ * magnifiers doubles as a "reset to fit" button. */
+.im_view_zoom_group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 14px;
+    padding-right: 14px;
+    border-right: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.18));
+}
+
+.im_view_zoom_val {
+    flex: 0 0 auto;
+    min-width: 52px;
+    height: 32px;
+    padding: 0 8px;
+    border-radius: 16px;
+    border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.18));
+    background: rgba(0, 0, 0, 0.45);
+    color: var(--SmartThemeBodyColor, #fff);
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.12s, color 0.12s;
+    margin: 0;
+}
+
+.im_view_zoom_val:hover {
+    background: var(--SmartThemeQuoteColor, #6a9cff);
+}
+
+.im_view_tool:disabled {
+    opacity: 0.35;
+    cursor: default;
+    pointer-events: none;
+}
+
 /* The checkbox tool is a label wrapping a hidden native checkbox. */
 .im_view_tool_check input {
     position: absolute;
@@ -1014,6 +1075,15 @@ body.im_modal_open {
     .im_view_toolbar {
         gap: 14px;
         margin-top: 8px;
+    }
+    .im_view_zoom_group {
+        gap: 8px;
+        margin-right: 10px;
+        padding-right: 10px;
+    }
+    .im_view_zoom_val {
+        height: 36px;
+        min-width: 56px;
     }
 }
 

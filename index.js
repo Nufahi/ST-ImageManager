@@ -1992,6 +1992,11 @@ async function viewImage(img) {
         </div>
         <div class="im_view_caption"></div>
         <div class="im_view_toolbar">
+            <div class="im_view_zoom_group">
+                <button type="button" class="im_view_tool im_view_zoom_out" title="${escapeHtml(t('viewer.zoomOut'))}" aria-label="${escapeHtml(t('viewer.zoomOut'))}"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+                <button type="button" class="im_view_zoom_val" title="${escapeHtml(t('viewer.zoomReset'))}" aria-label="${escapeHtml(t('viewer.zoomReset'))}">100%</button>
+                <button type="button" class="im_view_tool im_view_zoom_in" title="${escapeHtml(t('viewer.zoomIn'))}" aria-label="${escapeHtml(t('viewer.zoomIn'))}"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+            </div>
             <label class="im_view_tool im_view_tool_check" title="${escapeHtml(t('viewer.select'))}">
                 <input type="checkbox" class="im_view_check">
                 <i class="fa-regular fa-square im_view_check_icon"></i>
@@ -2014,8 +2019,60 @@ async function viewImage(img) {
     const deleteBtn = wrap.querySelector('.im_view_delete');
     const trashBtn = wrap.querySelector('.im_view_trash');
     const restoreBtn = wrap.querySelector('.im_view_restore');
+    const zoomInBtn = wrap.querySelector('.im_view_zoom_in');
+    const zoomOutBtn = wrap.querySelector('.im_view_zoom_out');
+    const zoomValBtn = wrap.querySelector('.im_view_zoom_val');
 
     let popupRef = null;
+
+    // --- Zoom state ---
+    // zoom = 1 means "fit to popup" (the media's natural max-width/max-height
+    // CSS). Zooming measures the fitted size once, then sets explicit width /
+    // height = base × zoom and lets the media wrap scroll (pan) the overflow.
+    const ZOOM_STEP = 1.25;
+    const ZOOM_MIN = 0.25;
+    const ZOOM_MAX = 8;
+    let zoom = 1;
+    let zoomBase = null; // { w, h } of the fitted media, measured lazily
+
+    const syncZoomUi = () => {
+        zoomValBtn.textContent = `${Math.round(zoom * 100)}%`;
+        zoomInBtn.disabled = zoom >= ZOOM_MAX - 1e-6;
+        zoomOutBtn.disabled = zoom <= ZOOM_MIN + 1e-6;
+        mediaWrap.classList.toggle('is-zoomed', zoom !== 1);
+    };
+
+    const applyZoom = () => {
+        const media = mediaWrap.querySelector('.im_view_media');
+        if (!media) return;
+        if (zoom === 1) {
+            // Back to "fit": drop the explicit size so CSS max-* rules rule again.
+            media.style.width = '';
+            media.style.height = '';
+            zoomBase = null;
+        } else {
+            // Measure the fitted size once per image, on first zoom.
+            if (!zoomBase) {
+                const rect = media.getBoundingClientRect();
+                if (!rect.width || !rect.height) return; // not laid out yet
+                zoomBase = { w: rect.width, h: rect.height };
+            }
+            media.style.width = `${Math.round(zoomBase.w * zoom)}px`;
+            media.style.height = `${Math.round(zoomBase.h * zoom)}px`;
+        }
+        syncZoomUi();
+    };
+
+    const setZoom = (next) => {
+        zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, next));
+        // Snap tiny float drift back to exactly 1 so "fit" is reachable.
+        if (Math.abs(zoom - 1) < 0.01) zoom = 1;
+        applyZoom();
+    };
+
+    zoomInBtn.addEventListener('click', (e) => { e.stopPropagation(); setZoom(zoom * ZOOM_STEP); });
+    zoomOutBtn.addEventListener('click', (e) => { e.stopPropagation(); setZoom(zoom / ZOOM_STEP); });
+    zoomValBtn.addEventListener('click', (e) => { e.stopPropagation(); setZoom(1); });
 
     // Drop the item at the current index from the viewer's navigation list and
     // either advance to the next image or close the viewer if it was the last.
@@ -2051,6 +2108,10 @@ async function viewImage(img) {
     const renderViewer = () => {
         const cur = list[index];
         if (!cur) return;
+        // Every image starts at "fit" — zoom never carries over between photos.
+        zoom = 1;
+        zoomBase = null;
+        mediaWrap.classList.remove('is-zoomed');
         mediaWrap.innerHTML = cur.isVideo
             ? `<video src="${escapeHtml(cur.url)}" controls autoplay class="im_view_media"></video>`
             : `<img src="${escapeHtml(cur.url)}" class="im_view_media" alt="">`;
@@ -2065,6 +2126,7 @@ async function viewImage(img) {
         prevBtn.classList.toggle('im_hidden', !multi);
         nextBtn.classList.toggle('im_hidden', !multi);
         syncToolbar();
+        syncZoomUi();
     };
 
     const go = (delta) => {
@@ -2182,7 +2244,9 @@ async function viewImage(img) {
     let swiping = false;
     const SWIPE_THRESHOLD = 45; // px of horizontal travel needed to flip
     mediaWrap.addEventListener('touchstart', (e) => {
-        if (list.length < 2 || e.touches.length !== 1) { swiping = false; return; }
+        // While zoomed in, horizontal drags pan the enlarged image (the wrap
+        // scrolls) — don't hijack them for prev/next navigation.
+        if (zoom !== 1 || list.length < 2 || e.touches.length !== 1) { swiping = false; return; }
         swiping = true;
         touchStartX = e.touches[0].clientX;
         touchStartY = e.touches[0].clientY;

@@ -139,5 +139,8 @@
   "viewer.download": "Download this image",
   "viewer.trash": "Move this image to the recycle bin",
   "viewer.restore": "Restore this image from the recycle bin",
-  "viewer.purge": "Delete this image permanently"
+  "viewer.purge": "Delete this image permanently",
+  "viewer.zoomIn": "Zoom in",
+  "viewer.zoomOut": "Zoom out",
+  "viewer.zoomReset": "Reset zoom (fit to window)"
 }
