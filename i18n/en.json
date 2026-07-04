@@ -37,7 +37,7 @@
   "select.delete": "Delete",
   "select.deleteTitle": "Permanently delete selected files from the server",
 
-  "toolbar.searchPh": "Search",
+  "toolbar.folderSearchPh": "Find folder",
   "toolbar.sortTitle": "Sort images",
   "toolbar.sort.newest": "Newest",
   "toolbar.sort.oldest": "Oldest",
@@ -54,7 +54,6 @@
   "sidebar.resizerTitle": "Drag to resize · double-click to collapse",
   "sidebar.title": "Folders",
   "sidebar.subtitle": "Each folder is a character's image folder on the server.",
-  "sidebar.searchPh": "Filter folders",
 
   "folder.all": "All images",
   "folder.root": "(root)",
@@ -77,7 +76,6 @@
   "page.of": "/ {{pages}}",
 
   "status.loading": "Loading images...",
-  "empty.noMatch": "No images match your search.",
   "empty.none": "No images here. Nothing to clean!",
 
   "card.selectTitle": "Select",

@@ -37,7 +37,7 @@
   "select.delete": "Удалить",
   "select.deleteTitle": "Безвозвратно удалить выбранные файлы с сервера",
 
-  "toolbar.searchPh": "Поиск",
+  "toolbar.folderSearchPh": "Найти папку",
   "toolbar.sortTitle": "Сортировка изображений",
   "toolbar.sort.newest": "Сначала новые",
   "toolbar.sort.oldest": "Сначала старые",
@@ -54,7 +54,6 @@
   "sidebar.resizerTitle": "Потяните для изменения ширины · двойной клик — свернуть",
   "sidebar.title": "Папки",
   "sidebar.subtitle": "Каждая папка — это папка изображений персонажа на сервере.",
-  "sidebar.searchPh": "Найти папку",
 
   "folder.all": "Все изображения",
   "folder.root": "(корень)",
@@ -77,7 +76,6 @@
   "page.of": "/ {{pages}}",
 
   "status.loading": "Загрузка изображений...",
-  "empty.noMatch": "Нет изображений по вашему запросу.",
   "empty.none": "Здесь нет изображений. Чистить нечего!",
 
   "card.selectTitle": "Выбрать",

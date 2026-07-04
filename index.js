@@ -198,8 +198,7 @@ const state = {
     sizeCache: new Map(), // path -> bytes (lazily filled)
     activeFolder: ALL_FOLDERS,
     autoFolderPending: false, // jump to current character's folder on next load
-    search: '',
-    folderSearch: '',   // sidebar folder-list filter (client-side only)
+    folderSearch: '',   // toolbar folder finder (filters the sidebar list)
     sort: DEFAULT_SETTINGS.sort,
     pageSize: DEFAULT_SETTINGS.pageSize,
     showHidden: false,
@@ -1118,7 +1117,6 @@ function getFilteredImages() {
     const cacheKey = [
         filterVersion,
         state.activeFolder,
-        state.search,
         state.sort,
         state.showHidden ? 1 : 0,
     ].join('\u0000');
@@ -1128,7 +1126,6 @@ function getFilteredImages() {
 
     const hidden = getHiddenSet();
     const trashed = getTrashSet();
-    const search = state.search.trim().toLowerCase();
     const trashView = state.activeFolder === TRASH_FOLDER;
 
     const list = state.images.filter((img) => {
@@ -1146,7 +1143,6 @@ function getFilteredImages() {
             const isHidden = hidden.has(img.path);
             if (state.showHidden ? !isHidden : isHidden) return false;
         }
-        if (search && !img.file.toLowerCase().includes(search)) return false;
         return true;
     });
 
@@ -1236,10 +1232,6 @@ function renderLoading(show) {
     state.dom.loading.classList.toggle('im_hidden', !show);
 }
 
-// Show the sidebar folder filter only once the list is long enough for
-// scrolling to become a chore.
-const FOLDER_SEARCH_MIN = 8;
-
 function renderFolders() {
     const list = state.dom.folderList;
     if (!list) return;
@@ -1257,12 +1249,8 @@ function renderFolders() {
         return true;
     }).length;
 
-    // The filter box appears only when there are many folders. Clearing /
-    // hiding it always shows everything again.
-    const searchWrap = state.dom.folderSearchWrap;
-    const showSearch = state.folders.length >= FOLDER_SEARCH_MIN;
-    searchWrap?.classList.toggle('im_hidden', !showSearch);
-    const folderQuery = showSearch ? state.folderSearch.trim().toLowerCase() : '';
+    // Toolbar folder finder: narrows the sidebar folder list down by name.
+    const folderQuery = state.folderSearch.trim().toLowerCase();
 
     const entries = [{ name: ALL_FOLDERS, label: t('folder.all'), icon: 'fa-layer-group' }];
     for (const f of state.folders) {
@@ -1529,9 +1517,8 @@ function renderGrid() {
         grid.innerHTML = '';
         if (state.dom.empty) {
             state.dom.empty.classList.remove('im_hidden');
-            state.dom.empty.innerHTML = state.search
-                ? `<i class="fa-solid fa-magnifying-glass"></i><span>${escapeHtml(t('empty.noMatch'))}</span>`
-                : `<i class="fa-solid fa-image"></i><span>${escapeHtml(t('empty.none'))}</span>`;
+            state.dom.empty.innerHTML =
+                `<i class="fa-solid fa-image"></i><span>${escapeHtml(t('empty.none'))}</span>`;
         }
         return;
     }
@@ -2386,6 +2373,68 @@ async function viewImage(img) {
         go(dx < 0 ? 1 : -1); // swipe left -> next, swipe right -> prev
     }, { passive: true });
 
+    // --- Pinch zoom + double-tap (mobile) ---
+    // On touch devices the zoom BUTTONS are hidden (CSS) — pinch with two
+    // fingers to zoom instead, keeping the picture point between your fingers
+    // in place; double-tap resets to fit (or jumps to 2x when already fitted).
+    // `touch-action: pan-x pan-y` on the media wrap (CSS) stops the browser's
+    // own page pinch-zoom / double-tap zoom from hijacking these gestures.
+    let pinching = false;
+    let pinchStartDist = 0;
+    let pinchStartZoom = 1;
+    const touchDist = (a, b) => Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
+    mediaWrap.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+            pinching = true;
+            swiping = false;   // a second finger cancels any pending swipe
+            pinchStartDist = touchDist(e.touches[0], e.touches[1]);
+            pinchStartZoom = zoom;
+        }
+    }, { passive: true });
+    mediaWrap.addEventListener('touchmove', (e) => {
+        if (!pinching || e.touches.length !== 2 || !pinchStartDist) return;
+        e.preventDefault();   // keep the page itself from pinch-zooming
+        const [t0, t1] = [e.touches[0], e.touches[1]];
+        // Focal point (pinch midpoint) relative to the wrap's viewport — used
+        // to keep the spot between the fingers stationary while scaling.
+        const rect = mediaWrap.getBoundingClientRect();
+        const midX = (t0.clientX + t1.clientX) / 2 - rect.left;
+        const midY = (t0.clientY + t1.clientY) / 2 - rect.top;
+        const prev = zoom;
+        setZoom(pinchStartZoom * (touchDist(t0, t1) / pinchStartDist));
+        const f = zoom / prev;
+        if (f !== 1) {
+            mediaWrap.scrollLeft = (mediaWrap.scrollLeft + midX) * f - midX;
+            mediaWrap.scrollTop = (mediaWrap.scrollTop + midY) * f - midY;
+        }
+    }, { passive: false });
+    mediaWrap.addEventListener('touchend', (e) => {
+        if (pinching && e.touches.length < 2) {
+            pinching = false;
+            pinchEndedAt = Date.now();   // fingers lifting off a pinch are not taps
+        }
+    }, { passive: true });
+
+    // Double-tap: reset a zoomed image back to fit; from fit, jump to 2x
+    // (pinching in needs two fingers — double-tap is the quick one-thumb way).
+    let lastTap = { t: 0, x: 0, y: 0 };
+    let pinchEndedAt = 0;
+    mediaWrap.addEventListener('touchend', (e) => {
+        if (pinching || e.touches.length || e.changedTouches.length !== 1) return;
+        if (Date.now() - pinchEndedAt < 350) return;   // tail end of a pinch
+        // Videos keep their native tap behaviour (play/pause, controls) —
+        // double-tap zoom is for still images only. Pinch still works.
+        if (e.target instanceof Element && e.target.closest('video')) return;
+        const t = e.changedTouches[0];
+        const now = Date.now();
+        const isDouble = (now - lastTap.t) < 320
+            && Math.hypot(t.clientX - lastTap.x, t.clientY - lastTap.y) < 40;
+        lastTap = { t: now, x: t.clientX, y: t.clientY };
+        if (!isDouble) return;
+        lastTap.t = 0;   // don't let a triple-tap re-trigger
+        setZoom(zoom !== 1 ? 1 : 2);
+    }, { passive: true });
+
     renderViewer();
 
     try {
@@ -2570,7 +2619,6 @@ async function injectUI() {
         empty: $('im_empty'),
         grid: $('im_grid'),
         folderList: $('im_folder_list'),
-        folderSearchWrap: $('im_folder_search_wrap'),
         folderSearch: $('im_folder_search'),
         content: document.querySelector('#im_modal .im_content'),
         sidebar: $('im_sidebar'),
@@ -2584,7 +2632,6 @@ async function injectUI() {
         pageTotal: $('im_page_total'),
         prevPage: $('im_prev_page'),
         nextPage: $('im_next_page'),
-        search: $('im_search'),
         sort: $('im_sort'),
         pageSize: $('im_page_size'),
         showHidden: $('im_show_hidden'),
@@ -2638,28 +2685,19 @@ function bindEvents() {
     });
     buildThemeMenu();
 
-    // Search is debounced: a full filter+sort+grid rebuild per keystroke is
-    // wasteful on large libraries — 200ms after the last key is plenty.
-    let searchTimer = null;
-    d.search?.addEventListener('input', () => {
-        clearTimeout(searchTimer);
-        searchTimer = setTimeout(() => {
-            state.search = d.search.value;
-            state.currentPage = 1;
-            renderGrid();
-            renderPageControls();
-            renderFolders();
-            queueVisibleSizes();
-        }, 200);
-    });
-
-    // Sidebar folder filter (client-side, narrows only the character folders).
+    // Toolbar folder finder (debounced): narrows the sidebar folder list down
+    // by name — with many characters the list is otherwise a chore to scroll.
     let folderSearchTimer = null;
     d.folderSearch?.addEventListener('input', () => {
         clearTimeout(folderSearchTimer);
         folderSearchTimer = setTimeout(() => {
             state.folderSearch = d.folderSearch.value;
             renderFolders();
+            // On mobile the folder list lives behind the collapsed dropdown —
+            // pop it open so the narrowed list is actually visible.
+            if (state.folderSearch.trim() && isMobileLayout()) {
+                state.dom.sidebar?.classList.remove('is-collapsed');
+            }
         }, 150);
     });
 

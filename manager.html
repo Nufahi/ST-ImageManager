@@ -66,8 +66,8 @@
 
         <div class="im_toolbar">
             <div class="im_search_wrap">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input id="im_search" type="search" class="text_pole textarea_compact" data-i18n-placeholder="toolbar.searchPh" placeholder="Search">
+                <i class="fa-solid fa-folder-open"></i>
+                <input id="im_folder_search" type="search" class="text_pole textarea_compact" data-i18n-placeholder="toolbar.folderSearchPh" placeholder="Find folder">
             </div>
             <select id="im_sort" class="text_pole textarea_compact" data-i18n-title="toolbar.sortTitle" title="Sort images">
                 <option value="date-desc" data-i18n="toolbar.sort.newest">Newest</option>
@@ -110,12 +110,6 @@
                 <div class="im_sidebar_header">
                     <h3 data-i18n="sidebar.title">Folders</h3>
                     <p data-i18n="sidebar.subtitle">Each folder is a character's image folder on the server.</p>
-                </div>
-                <!-- Folder filter: shown by JS only when there are enough folders
-                     for scrolling the list to become a chore. -->
-                <div id="im_folder_search_wrap" class="im_folder_search_wrap im_hidden">
-                    <i class="fa-solid fa-magnifying-glass"></i>
-                    <input id="im_folder_search" type="search" class="text_pole textarea_compact" data-i18n-placeholder="sidebar.searchPh" placeholder="Filter folders">
                 </div>
                 <div id="im_folder_list" class="im_folder_list"></div>
             </aside>

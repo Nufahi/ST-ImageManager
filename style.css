@@ -491,28 +491,6 @@ body.im_modal_open {
     opacity: 0.6;
 }
 
-/* Folder filter box (JS shows it only when the folder list is long). */
-.im_folder_search_wrap {
-    position: relative;
-    display: flex;
-    align-items: center;
-    margin: 0 0 8px;
-}
-
-.im_folder_search_wrap i {
-    position: absolute;
-    left: 8px;
-    font-size: 0.7rem;
-    opacity: 0.6;
-    pointer-events: none;
-}
-
-.im_folder_search_wrap input {
-    width: 100%;
-    padding-left: 24px !important;
-    font-size: 0.8rem;
-}
-
 .im_folder_list {
     display: flex;
     flex-direction: column;
@@ -1098,14 +1076,21 @@ body.im_modal_open {
         gap: 14px;
         margin-top: 8px;
     }
+}
+
+/* Touch devices zoom with gestures instead of buttons: pinch to zoom,
+ * double-tap to reset / jump to 2x. Hide the whole [- 100% +] group — but
+ * ONLY for real touch pointers (a narrow desktop window keeps the buttons,
+ * since a mouse can't pinch). */
+@media (pointer: coarse) {
     .im_view_zoom_group {
-        gap: 8px;
-        margin-right: 10px;
-        padding-right: 10px;
+        display: none;
     }
-    .im_view_zoom_val {
-        height: 36px;
-        min-width: 56px;
+    /* Keep the browser's own pinch-zoom / double-tap-zoom off the media so
+     * our gesture handlers get the raw events (panning still works via the
+     * wrap's scrolling). */
+    .im_view_media_wrap {
+        touch-action: pan-x pan-y;
     }
 }
 
