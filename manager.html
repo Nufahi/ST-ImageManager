@@ -74,6 +74,8 @@
                 <option value="date-asc" data-i18n="toolbar.sort.oldest">Oldest</option>
                 <option value="name-asc" data-i18n="toolbar.sort.az">A-Z</option>
                 <option value="name-desc" data-i18n="toolbar.sort.za">Z-A</option>
+                <option value="size-desc" data-i18n="toolbar.sort.sizeBig">Largest</option>
+                <option value="size-asc" data-i18n="toolbar.sort.sizeSmall">Smallest</option>
             </select>
             <select id="im_page_size" class="text_pole textarea_compact" data-i18n-title="toolbar.pageSizeTitle" title="Images per page">
                 <option value="10">10</option>
@@ -109,6 +111,12 @@
                     <h3 data-i18n="sidebar.title">Folders</h3>
                     <p data-i18n="sidebar.subtitle">Each folder is a character's image folder on the server.</p>
                 </div>
+                <!-- Folder filter: shown by JS only when there are enough folders
+                     for scrolling the list to become a chore. -->
+                <div id="im_folder_search_wrap" class="im_folder_search_wrap im_hidden">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input id="im_folder_search" type="search" class="text_pole textarea_compact" data-i18n-placeholder="sidebar.searchPh" placeholder="Filter folders">
+                </div>
                 <div id="im_folder_list" class="im_folder_list"></div>
             </aside>
 
@@ -130,6 +138,10 @@
                                 <option value="30" data-i18n="trash.retention.30">30 days</option>
                                 <option value="90" data-i18n="trash.retention.90">90 days</option>
                             </select>
+                            <button id="im_restore_trash" type="button" class="menu_button menu_button_icon interactable" data-i18n-title="trash.restoreAllTitle" title="Restore everything from the recycle bin">
+                                <i class="fa-solid fa-rotate-left"></i>
+                                <span data-i18n="trash.restoreAll">Restore all</span>
+                            </button>
                             <button id="im_empty_trash" type="button" class="menu_button menu_button_icon interactable im_btn_danger" data-i18n-title="trash.emptyTitle" title="Permanently delete everything in the recycle bin">
                                 <i class="fa-solid fa-fire"></i>
                                 <span data-i18n="trash.empty">Empty</span>

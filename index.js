@@ -193,10 +193,13 @@ const state = {
     folders: [],
     /** All images flattened: { path, folder, file, url, isVideo, mtime } */
     images: [],
+    imageByPath: new Map(), // path -> image record (O(1) lookups)
+    filterCache: null,      // memoised getFilteredImages() result (see below)
     sizeCache: new Map(), // path -> bytes (lazily filled)
     activeFolder: ALL_FOLDERS,
     autoFolderPending: false, // jump to current character's folder on next load
     search: '',
+    folderSearch: '',   // sidebar folder-list filter (client-side only)
     sort: DEFAULT_SETTINGS.sort,
     pageSize: DEFAULT_SETTINGS.pageSize,
     showHidden: false,
@@ -204,6 +207,7 @@ const state = {
     selected: new Set(), // set of paths
     dom: {},
     sizeQueue: [],
+    sizeQueued: new Set(), // mirrors sizeQueue for O(1) dedupe
     sizeRunning: false,
     mode: 'modal',      // 'modal' (centered) | 'floating' (movable window)
     floatBox: null,     // { left, top, width, height } when floating
@@ -363,6 +367,7 @@ function addPathsToTrash(paths) {
     const trashedSet = existing;
     s.hidden = s.hidden.filter(p => !trashedSet.has(p));
     saveSettings();
+    invalidateFilterCache();
     return added;
 }
 
@@ -373,6 +378,7 @@ function restorePathsFromTrash(paths) {
     const before = s.trash.length;
     s.trash = s.trash.filter(e => !drop.has(e.path));
     saveSettings();
+    invalidateFilterCache();
     return before - s.trash.length;
 }
 
@@ -858,75 +864,96 @@ async function fetchSize(url) {
  * DATA LOADING
  * ============================================================ */
 async function loadAll() {
+    // Re-entry guard: spam-clicking Refresh (or open + refresh) must not run
+    // two overlapping scans that interleave their state writes.
+    if (state.isLoading) return;
     state.isLoading = true;
     renderLoading(true);
 
-    const folderNames = await apiGetFolders();
-    // The root folder isn't returned by /folders (only sub-dirs), but listing
-    // with an empty-ish folder returns the root files. We add a synthetic root.
-    const folders = [];
+    try {
+        const folderNames = await apiGetFolders();
+        // The root folder isn't returned by /folders (only sub-dirs), but listing
+        // with an empty-ish folder returns the root files. We add a synthetic root.
+        // All folders are listed IN PARALLEL (limited concurrency) — the previous
+        // one-at-a-time loop meant a library with 100 characters took 100 serial
+        // round trips to open.
+        const CONCURRENCY = 6;
+        const jobs = [
+            { name: ROOT_FOLDER, label: '(root)', query: '.' },
+            ...folderNames.map(name => ({ name, label: name, query: name })),
+        ];
+        const results = new Array(jobs.length);
+        let next = 0;
+        const worker = async () => {
+            while (next < jobs.length) {
+                const i = next++;
+                results[i] = await apiListImages(jobs[i].query);
+            }
+        };
+        await Promise.all(Array.from({ length: Math.min(CONCURRENCY, jobs.length) }, worker));
 
-    // Root images (directly under /user/images)
-    const rootFiles = await apiListImages('.');
-    if (rootFiles.length) {
-        folders.push({ name: ROOT_FOLDER, label: '(root)', files: rootFiles });
-    }
-
-    for (const name of folderNames) {
-        const files = await apiListImages(name);
-        folders.push({ name, label: name, files });
-    }
-
-    state.folders = folders;
-
-    // Flatten
-    const images = [];
-    let seq = 0;
-    for (const f of folders) {
-        const folderSeg = f.name === ROOT_FOLDER ? '' : `${encodeURIComponent(f.name)}/`;
-        const rawSeg = f.name === ROOT_FOLDER ? '' : `${f.name}/`;
-        // The API returns each folder's files newest-first. Keep a per-folder
-        // index so we can fall back to that order when a file name has no
-        // embedded timestamp.
-        let folderIndex = 0;
-        for (const file of f.files) {
-            images.push({
-                folder: f.name,
-                folderLabel: f.label,
-                file,
-                // user-relative path used by the delete endpoint
-                path: `user/images/${rawSeg}${file}`,
-                // browser URL (encoded)
-                url: `user/images/${folderSeg}${encodeURIComponent(file)}`,
-                isVideo: isVideoFile(file),
-                // Real date sort key: timestamp embedded in the file name
-                // (ST names inline images with Date.now()). null if unknown.
-                mtime: extractTimestamp(file),
-                // Stable fallback ordering: API order within a folder (newer
-                // first), then a global sequence so the sort is deterministic.
-                folderOrder: folderIndex++,
-                seq: seq++,
-            });
+        const folders = [];
+        for (let i = 0; i < jobs.length; i++) {
+            const files = results[i] || [];
+            // Keep the synthetic root only when it actually has files.
+            if (jobs[i].name === ROOT_FOLDER && !files.length) continue;
+            folders.push({ name: jobs[i].name, label: jobs[i].label, files });
         }
-    }
-    state.images = images;
 
-    // On a fresh open, jump straight to the folder of the character you're
-    // currently chatting with (so you don't have to hunt for it every time you
-    // reload the page). Only do this once per open, only if that folder
-    // actually exists, and never override an explicit folder pick or a refresh.
-    if (state.autoFolderPending) {
-        state.autoFolderPending = false;
-        const charFolder = getCurrentCharFolder();
-        if (charFolder && folders.some(f => f.name === charFolder)) {
-            state.activeFolder = charFolder;
-            state.currentPage = 1;
-            updateSidebarLabel();
+        state.folders = folders;
+
+        // Flatten
+        const images = [];
+        let seq = 0;
+        for (const f of folders) {
+            const folderSeg = f.name === ROOT_FOLDER ? '' : `${encodeURIComponent(f.name)}/`;
+            const rawSeg = f.name === ROOT_FOLDER ? '' : `${f.name}/`;
+            for (const file of f.files) {
+                images.push({
+                    folder: f.name,
+                    folderLabel: f.label,
+                    file,
+                    // user-relative path used by the delete endpoint
+                    path: `user/images/${rawSeg}${file}`,
+                    // browser URL (encoded)
+                    url: `user/images/${folderSeg}${encodeURIComponent(file)}`,
+                    isVideo: isVideoFile(file),
+                    // Real date sort key: timestamp embedded in the file name
+                    // (ST names inline images with Date.now()). null if unknown.
+                    mtime: extractTimestamp(file),
+                    // Stable fallback ordering: API order within a folder (newer
+                    // first), then a global sequence so the sort is deterministic.
+                    seq: seq++,
+                });
+            }
         }
-    }
+        state.images = images;
+        // O(1) path -> image lookups for the size queue / card wiring.
+        state.imageByPath = new Map(images.map(i => [i.path, i]));
+        invalidateFilterCache();
 
-    state.isLoading = false;
-    renderLoading(false);
+        // Garbage-collect hidden/trash records whose files no longer exist on
+        // disk (deleted outside the manager). Without this the settings arrays
+        // grow forever and slowly poison every filter pass.
+        gcStaleSettingPaths();
+
+        // On a fresh open, jump straight to the folder of the character you're
+        // currently chatting with (so you don't have to hunt for it every time you
+        // reload the page). Only do this once per open, only if that folder
+        // actually exists, and never override an explicit folder pick or a refresh.
+        if (state.autoFolderPending) {
+            state.autoFolderPending = false;
+            const charFolder = getCurrentCharFolder();
+            if (charFolder && folders.some(f => f.name === charFolder)) {
+                state.activeFolder = charFolder;
+                state.currentPage = 1;
+                updateSidebarLabel();
+            }
+        }
+    } finally {
+        state.isLoading = false;
+        renderLoading(false);
+    }
     render();
 
     // Kick off lazy size fetching for visible page
@@ -937,14 +964,36 @@ async function loadAll() {
     autoCleanTrash();
 }
 
+/** Drop hidden/trash records that point at files which no longer exist in the
+ *  fresh listing. Runs after every loadAll(), one settings save at most.
+ *  Safety: skipped entirely when the listing came back EMPTY — that's far more
+ *  likely a server/API failure than a genuinely image-less install, and wiping
+ *  the records on a hiccup would silently un-hide / un-trash everything. */
+function gcStaleSettingPaths() {
+    if (!state.imageByPath || !state.imageByPath.size) return;
+    const s = getSettings();
+    let dirty = false;
+    const hiddenBefore = s.hidden.length;
+    s.hidden = s.hidden.filter(p => state.imageByPath.has(p));
+    if (s.hidden.length !== hiddenBefore) dirty = true;
+    const trashBefore = s.trash.length;
+    s.trash = s.trash.filter(e => state.imageByPath.has(e.path));
+    if (s.trash.length !== trashBefore) dirty = true;
+    if (dirty) {
+        saveSettings();
+        invalidateFilterCache();
+    }
+}
+
 /* ============================================================
  * SIZE QUEUE (lazy, throttled)
  * ============================================================ */
 function queueVisibleSizes() {
     const visible = getPageImages();
     for (const img of visible) {
-        if (!state.sizeCache.has(img.path) && !state.sizeQueue.includes(img.path)) {
+        if (!state.sizeCache.has(img.path) && !state.sizeQueued.has(img.path)) {
             state.sizeQueue.push(img.path);
+            state.sizeQueued.add(img.path);
         }
     }
     // Also measure the whole current view so the total MB in the summary is
@@ -957,11 +1006,19 @@ function queueVisibleSizes() {
  *  the summary can show the real total size (in MB). Throttled by runSizeQueue. */
 function queueFolderSizes() {
     for (const img of getFilteredImages()) {
-        if (!state.sizeCache.has(img.path) && !state.sizeQueue.includes(img.path)) {
+        if (!state.sizeCache.has(img.path) && !state.sizeQueued.has(img.path)) {
             state.sizeQueue.push(img.path);
+            state.sizeQueued.add(img.path);
         }
     }
     runSizeQueue();
+}
+
+/** Drop all pending size lookups (e.g. when the manager closes — no point
+ *  hammering the server with HEAD requests for a window nobody sees). */
+function drainSizeQueue() {
+    state.sizeQueue.length = 0;
+    state.sizeQueued.clear();
 }
 
 async function runSizeQueue() {
@@ -973,15 +1030,17 @@ async function runSizeQueue() {
     const worker = async () => {
         while (state.sizeQueue.length) {
             const path = state.sizeQueue.shift();
-            const img = state.images.find(i => i.path === path);
+            state.sizeQueued.delete(path);
+            const img = state.imageByPath.get(path);
             if (!img) continue;
             const size = await fetchSize(img.url);
             state.sizeCache.set(path, size);
             updateCardSize(path, size);
-            // Periodically refresh the running total so the MB figure ticks up.
+            // Periodically refresh the running totals so the MB figures tick
+            // up. Text-only updates — no full re-render / re-sort per tick.
             if (++sinceRefresh >= 8) {
                 sinceRefresh = 0;
-                renderPageControls();
+                updateViewSummaryText();
                 updateStorageSummary();
             }
         }
@@ -998,6 +1057,12 @@ async function runSizeQueue() {
         console.warn(`[${MODULE_NAME}] size queue error`, error);
     } finally {
         state.sizeRunning = false;
+    }
+    // Size sorting depends on the cache we just filled — re-sort once at the
+    // end of the scan (not per-file) so the grid settles into the right order.
+    if (state.sort.startsWith('size') && state.isOpen) {
+        invalidateFilterCache();
+        renderGrid();
     }
     renderPageControls();
     updateStorageSummary();
@@ -1036,13 +1101,37 @@ function dateSortKey(img) {
     return -1 - img.seq;
 }
 
+/* getFilteredImages() used to do a full filter + sort of the whole library on
+ * EVERY call — and one render() calls it 5-6 times (grid, page controls,
+ * summary, folder counts, page slice), with the size scanner re-triggering
+ * renders in the background. On big libraries that was constant jank. The
+ * result is now memoised: mutators bump `filterVersion` and the cached list is
+ * reused until either the version or one of the cheap view inputs changes. */
+let filterVersion = 0;
+
+function invalidateFilterCache() {
+    filterVersion++;
+    state.filterCache = null;
+}
+
 function getFilteredImages() {
+    const cacheKey = [
+        filterVersion,
+        state.activeFolder,
+        state.search,
+        state.sort,
+        state.showHidden ? 1 : 0,
+    ].join('\u0000');
+    if (state.filterCache && state.filterCache.key === cacheKey) {
+        return state.filterCache.list;
+    }
+
     const hidden = getHiddenSet();
     const trashed = getTrashSet();
     const search = state.search.trim().toLowerCase();
     const trashView = state.activeFolder === TRASH_FOLDER;
 
-    let list = state.images.filter((img) => {
+    const list = state.images.filter((img) => {
         const isTrashedImg = trashed.has(img.path);
         // The Trash view shows ONLY trashed images (across every folder); every
         // other view excludes them entirely.
@@ -1063,9 +1152,22 @@ function getFilteredImages() {
 
     const [field, order] = state.sort.split('-');
     const dir = order === 'asc' ? 1 : -1;
-    list = list.slice().sort((a, b) => {
+    list.sort((a, b) => {
         if (field === 'name') {
             return a.file.localeCompare(b.file, undefined, { numeric: true }) * dir;
+        }
+        if (field === 'size') {
+            // Sizes are collected lazily via HEAD requests, so some may still be
+            // unknown — those always sink to the END of the list (regardless of
+            // direction) instead of polluting the top. The order refines itself
+            // as the background scan fills the cache in.
+            const sa = state.sizeCache.get(a.path);
+            const sb = state.sizeCache.get(b.path);
+            const ha = sa != null;
+            const hb = sb != null;
+            if (ha !== hb) return ha ? -1 : 1;      // unknown sizes last
+            if (ha && sa !== sb) return (sa - sb) * dir;
+            return (b.seq - a.seq) * dir;            // deterministic tie-break
         }
         // Date sort. Every image gets a single comparable numeric "age" key so
         // the order is consistent and direction-aware even in the "All images"
@@ -1079,6 +1181,7 @@ function getFilteredImages() {
         return (b.seq - a.seq) * dir;
     });
 
+    state.filterCache = { key: cacheKey, list };
     return list;
 }
 
@@ -1133,6 +1236,10 @@ function renderLoading(show) {
     state.dom.loading.classList.toggle('im_hidden', !show);
 }
 
+// Show the sidebar folder filter only once the list is long enough for
+// scrolling to become a chore.
+const FOLDER_SEARCH_MIN = 8;
+
 function renderFolders() {
     const list = state.dom.folderList;
     if (!list) return;
@@ -1150,13 +1257,20 @@ function renderFolders() {
         return true;
     }).length;
 
+    // The filter box appears only when there are many folders. Clearing /
+    // hiding it always shows everything again.
+    const searchWrap = state.dom.folderSearchWrap;
+    const showSearch = state.folders.length >= FOLDER_SEARCH_MIN;
+    searchWrap?.classList.toggle('im_hidden', !showSearch);
+    const folderQuery = showSearch ? state.folderSearch.trim().toLowerCase() : '';
+
     const entries = [{ name: ALL_FOLDERS, label: t('folder.all'), icon: 'fa-layer-group' }];
     for (const f of state.folders) {
-        entries.push({
-            name: f.name,
-            label: f.name === ROOT_FOLDER ? t('folder.root') : f.name,
-            icon: 'fa-folder',
-        });
+        const label = f.name === ROOT_FOLDER ? t('folder.root') : f.name;
+        // "All images" and the trash stay visible regardless of the filter —
+        // only the character folders are narrowed down.
+        if (folderQuery && !label.toLowerCase().includes(folderQuery)) continue;
+        entries.push({ name: f.name, label, icon: 'fa-folder' });
     }
     // The recycle bin sits at the bottom of the folder list.
     entries.push({ name: TRASH_FOLDER, label: t('folder.trash'), icon: 'fa-trash-can' });
@@ -1203,7 +1317,9 @@ function folderLabel(f) {
 }
 
 function collapseSidebarOnMobile() {
-    if (window.innerWidth <= 768 && state.dom.sidebar) {
+    // Same breakpoint as the rest of the mobile layout (was a hardcoded 768
+    // that disagreed with the CSS media queries / isMobileLayout()).
+    if (isMobileLayout() && state.dom.sidebar) {
         state.dom.sidebar.classList.add('is-collapsed');
     }
 }
@@ -1341,7 +1457,7 @@ function cardHtml(img, hidden) {
 /** Attach click/select handlers to one card element. */
 function wireCard(card) {
     const path = card.dataset.path;
-    const img = state.images.find(i => i.path === path);
+    const img = state.imageByPath.get(path);
 
     card.querySelector('.im_card_check input')?.addEventListener('change', (e) => {
         toggleSelect(path, e.target.checked);
@@ -1459,24 +1575,30 @@ function renderPageControls() {
     if (state.dom.pageTotal) {
         state.dom.pageTotal.textContent = total > 0 ? t('page.of', { pages }) : '';
     }
-    if (state.dom.summary) {
-        // Count + total size of the CURRENT view (folder/search). The size is
-        // filled in lazily in the background, so it grows as scanning proceeds.
-        let known = 0, counted = 0;
-        const list = getFilteredImages();
-        for (const img of list) {
-            const s = state.sizeCache.get(img.path);
-            if (s != null) { known += s; counted++; }
-        }
-        let txt = tImages(total);
-        if (counted > 0) {
-            const scanning = counted < total;
-            txt += ` · ${scanning ? '~' : ''}${humanSize(known)}${scanning ? '…' : ''}`;
-        }
-        state.dom.summary.textContent = txt;
-    }
+    updateViewSummaryText();
     if (state.dom.prevPage) state.dom.prevPage.disabled = state.currentPage <= 1;
     if (state.dom.nextPage) state.dom.nextPage.disabled = state.currentPage >= pages;
+}
+
+/** Count + total size of the CURRENT view (folder/search). Split out of
+ *  renderPageControls() so the background size scanner can refresh just this
+ *  text without triggering the heavier page-control work every few files. */
+function updateViewSummaryText() {
+    if (!state.dom.summary) return;
+    // The size is filled in lazily in the background, so it grows as scanning
+    // proceeds.
+    let known = 0, counted = 0;
+    const list = getFilteredImages();
+    for (const img of list) {
+        const s = state.sizeCache.get(img.path);
+        if (s != null) { known += s; counted++; }
+    }
+    let txt = tImages(list.length);
+    if (counted > 0) {
+        const scanning = counted < list.length;
+        txt += ` · ${scanning ? '~' : ''}${humanSize(known)}${scanning ? '…' : ''}`;
+    }
+    state.dom.summary.textContent = txt;
 }
 
 function renderSelectBar() {
@@ -1598,6 +1720,7 @@ function toggleHide(path) {
     else set.add(path);
     s.hidden = [...set];
     saveSettings();
+    invalidateFilterCache();
     state.selected.delete(path);
     render();
     queueVisibleSizes();
@@ -1628,25 +1751,34 @@ function restoreOne(img) {
     queueVisibleSizes();
 }
 
-/** Permanently delete a single image that is currently in the trash. */
-async function purgeOne(img) {
-    if (!img) return;
+/** Permanently delete a single image, with a confirm dialog. `purging` only
+ *  changes the confirm title (trash view wording). Returns true when the file
+ *  was actually deleted — callers (e.g. the viewer) use that to advance.
+ *  Shared by the grid's delete/purge buttons and the viewer's delete tool. */
+async function deleteOneConfirmed(img, purging) {
+    if (!img) return false;
     const c = ctx();
     const confirmed = await c.Popup.show.confirm(
-        t('toast.purgeConfirm.titleOne'),
+        purging ? t('toast.purgeConfirm.titleOne') : t('toast.deleteConfirm.titleOne'),
         `${escapeHtml(img.file)}<br><small>${escapeHtml(t('toast.deleteConfirm.bodyOne'))}</small>`,
     );
-    if (!confirmed) return;
+    if (!confirmed) return false;
     const ok = await apiDeleteImage(img.path);
-    if (ok) {
-        // removeImageFromState() also drops the path from the trash list.
-        removeImageFromState(img.path);
-        toastr.success(t('toast.deleted.one'));
-        render();
-        queueVisibleSizes();
-    } else {
+    if (!ok) {
         toastr.error(t('toast.deleteFailed'));
+        return false;
     }
+    // removeImageFromState() also drops the path from the trash list.
+    removeImageFromState(img.path);
+    toastr.success(t('toast.deleted.one'));
+    render();
+    queueVisibleSizes();
+    return true;
+}
+
+/** Permanently delete a single image that is currently in the trash. */
+function purgeOne(img) {
+    return deleteOneConfirmed(img, true);
 }
 
 /** Move the current selection into the recycle bin. */
@@ -1665,6 +1797,18 @@ function bulkRestore() {
     const n = restorePathsFromTrash([...state.selected]);
     toastr.success(t('toast.restored.many', { count: n }));
     state.selected.clear();
+    render();
+    queueVisibleSizes();
+}
+
+/** Restore EVERYTHING from the recycle bin in one click (no confirm needed —
+ *  restoring is safe, files aren't touched; the symmetric twin of "Empty"). */
+function restoreAllTrash() {
+    const trashPaths = getSettings().trash.map(e => e.path);
+    if (!trashPaths.length) return;
+    const n = restorePathsFromTrash(trashPaths);
+    for (const p of trashPaths) state.selected.delete(p);
+    toastr.success(t('toast.restored.many', { count: n }));
     render();
     queueVisibleSizes();
 }
@@ -1913,7 +2057,7 @@ async function bulkDownload() {
     if (!state.selected.size) return;
     const paths = [...state.selected];
     const imgs = paths
-        .map(p => state.images.find(i => i.path === p))
+        .map(p => state.imageByPath.get(p))
         .filter(Boolean);
     if (!imgs.length) return;
 
@@ -1965,6 +2109,7 @@ async function bulkHide() {
     for (const p of state.selected) set.add(p);
     s.hidden = [...set];
     saveSettings();
+    invalidateFilterCache();
     toastr.info(t('toast.hidden', { count: state.selected.size }));
     state.selected.clear();
     render();
@@ -2178,11 +2323,7 @@ async function viewImage(img) {
         e.stopPropagation();
         const cur = list[index];
         if (!cur) return;
-        addPathsToTrash([cur.path]);
-        state.selected.delete(cur.path);
-        toastr.info(t('toast.trashed.one'));
-        render();
-        queueVisibleSizes();
+        trashOne(cur);   // shared with the grid card's trash button
         advanceAfterRemoval();
     });
 
@@ -2192,11 +2333,7 @@ async function viewImage(img) {
         e.stopPropagation();
         const cur = list[index];
         if (!cur) return;
-        restorePathsFromTrash([cur.path]);
-        state.selected.delete(cur.path);
-        toastr.success(t('toast.restored.one'));
-        render();
-        queueVisibleSizes();
+        restoreOne(cur); // shared with the grid card's restore button
         advanceAfterRemoval();
     });
 
@@ -2208,24 +2345,10 @@ async function viewImage(img) {
         e.stopPropagation();
         const cur = list[index];
         if (!cur) return;
-        const purging = inTrashView();
-        const confirmed = await c.Popup.show.confirm(
-            purging ? t('toast.purgeConfirm.titleOne') : t('toast.deleteConfirm.titleOne'),
-            `${escapeHtml(cur.file)}<br><small>${escapeHtml(t('toast.deleteConfirm.bodyOne'))}</small>`,
-        );
-        if (!confirmed) return;
-        const ok = await apiDeleteImage(cur.path);
-        if (!ok) { toastr.error(t('toast.deleteFailed')); return; }
-
-        // removeImageFromState() also clears the trash record (so a purge from
-        // the bin view needs no extra step).
-        removeImageFromState(cur.path);
-        toastr.success(t('toast.deleted.one'));
-        // Refresh the grid behind the viewer.
-        render();
-        queueVisibleSizes();
-
-        advanceAfterRemoval();
+        // Shared confirm+delete worker (same as the grid buttons); it already
+        // refreshes the grid behind the viewer. Advance only on success.
+        const ok = await deleteOneConfirmed(cur, inTrashView());
+        if (ok) advanceAfterRemoval();
     });
 
     // Keyboard arrows while the viewer is open.
@@ -2285,24 +2408,10 @@ async function viewImage(img) {
     }
 }
 
-async function deleteOne(img) {
-    if (!img) return;
-    const c = ctx();
-    const confirmed = await c.Popup.show.confirm(
-        t('toast.deleteConfirm.titleOne'),
-        `${escapeHtml(img.file)}<br><small>${escapeHtml(t('toast.deleteConfirm.bodyOne'))}</small>`,
-    );
-    if (!confirmed) return;
-
-    const ok = await apiDeleteImage(img.path);
-    if (ok) {
-        removeImageFromState(img.path);
-        toastr.success(t('toast.deleted.one'));
-        render();
-        queueVisibleSizes();
-    } else {
-        toastr.error(t('toast.deleteFailed'));
-    }
+/** Permanently delete a single image from a normal view (thin wrapper over the
+ *  shared confirm+delete worker — see deleteOneConfirmed / purgeOne). */
+function deleteOne(img) {
+    return deleteOneConfirmed(img, false);
 }
 
 async function bulkDelete() {
@@ -2322,22 +2431,8 @@ async function bulkDelete() {
         `${escapeHtml(t('toast.deleteConfirm.bodyMany'))}${sizeNote}`,
     );
     if (!confirmed) return;
-
-    let failed = 0;
-    const deleted = [];
-    toastr.info(t('toast.deleting', { count: paths.length }));
-    for (const path of paths) {
-        const ok = await apiDeleteImage(path);
-        if (ok) deleted.push(path);
-        else failed++;
-    }
-    // Single-pass cleanup avoids an O(N²) freeze when deleting many files.
-    removeImagesFromState(deleted);
-    state.selected.clear();
-    render();
-    queueVisibleSizes();
-    if (failed) toastr.warning(t('toast.deletePartial', { success: deleted.length, failed }));
-    else toastr.success(t('toast.deleted.many', { count: deleted.length }));
+    // Same delete-loop + single-pass cleanup as the trash purge.
+    await purgePaths(paths);
 }
 
 function removeImageFromState(path) {
@@ -2362,7 +2457,9 @@ function removeImagesFromState(paths) {
     for (const p of drop) {
         state.selected.delete(p);
         state.sizeCache.delete(p);
+        state.imageByPath.delete(p);
     }
+    invalidateFilterCache();
 
     // Drop from hidden / trash lists if present (one save at the end).
     const s = getSettings();
@@ -2380,11 +2477,18 @@ function removeImagesFromState(paths) {
 /**
  * Try to pull a millisecond timestamp out of an ST image filename.
  * ST uses Date.now() prefixes, e.g. "1718200000000_xxxx.png" or "1718200000000.png".
+ * The 13 digits must stand alone (not be a slice of a longer number), so a
+ * random hash/ID that happens to contain 13+ consecutive digits doesn't get
+ * misread as a date.
  */
 function extractTimestamp(filename) {
-    const m = String(filename).match(/(\d{13})/);
-    if (m) {
-        const ts = Number(m[1]);
+    // No lookbehind (kept out on purpose — it's a parse-time SyntaxError on
+    // older Safari, which would kill the whole script). Scan digit runs and
+    // only accept EXACTLY 13-digit ones instead.
+    const runs = String(filename).match(/\d+/g) || [];
+    for (const run of runs) {
+        if (run.length !== 13) continue;
+        const ts = Number(run);
         if (ts > 1262304000000 && ts < Date.now() + 86400000) return ts; // sane range (2010+)
     }
     return null;
@@ -2429,6 +2533,10 @@ function closeManager() {
     state.isOpen = false;
     document.body.classList.remove('im_modal_open');
     state.selected.clear();
+    // Stop hammering the server with HEAD size lookups for a window nobody
+    // sees any more (any in-flight worker drains naturally once the queue is
+    // empty; re-opening re-queues whatever is still unknown).
+    drainSizeQueue();
 }
 
 /* ============================================================
@@ -2462,6 +2570,8 @@ async function injectUI() {
         empty: $('im_empty'),
         grid: $('im_grid'),
         folderList: $('im_folder_list'),
+        folderSearchWrap: $('im_folder_search_wrap'),
+        folderSearch: $('im_folder_search'),
         content: document.querySelector('#im_modal .im_content'),
         sidebar: $('im_sidebar'),
         sidebarResizer: $('im_sidebar_resizer'),
@@ -2499,6 +2609,7 @@ async function injectUI() {
         bulkDelete: $('im_bulk_delete'),
         trashControls: $('im_trash_controls'),
         trashRetention: $('im_trash_retention'),
+        restoreTrash: $('im_restore_trash'),
         emptyTrash: $('im_empty_trash'),
     };
 
@@ -2515,6 +2626,8 @@ function bindEvents() {
 
     d.refresh?.addEventListener('click', () => {
         state.sizeCache.clear();
+        drainSizeQueue();
+        invalidateFilterCache();
         loadAll();
     });
 
@@ -2525,13 +2638,29 @@ function bindEvents() {
     });
     buildThemeMenu();
 
+    // Search is debounced: a full filter+sort+grid rebuild per keystroke is
+    // wasteful on large libraries — 200ms after the last key is plenty.
+    let searchTimer = null;
     d.search?.addEventListener('input', () => {
-        state.search = d.search.value;
-        state.currentPage = 1;
-        renderGrid();
-        renderPageControls();
-        renderFolders();
-        queueVisibleSizes();
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+            state.search = d.search.value;
+            state.currentPage = 1;
+            renderGrid();
+            renderPageControls();
+            renderFolders();
+            queueVisibleSizes();
+        }, 200);
+    });
+
+    // Sidebar folder filter (client-side, narrows only the character folders).
+    let folderSearchTimer = null;
+    d.folderSearch?.addEventListener('input', () => {
+        clearTimeout(folderSearchTimer);
+        folderSearchTimer = setTimeout(() => {
+            state.folderSearch = d.folderSearch.value;
+            renderFolders();
+        }, 150);
     });
 
     d.sort?.addEventListener('change', () => {
@@ -2594,6 +2723,7 @@ function bindEvents() {
         else bulkDelete();
     });
     d.emptyTrash?.addEventListener('click', emptyTrash);
+    d.restoreTrash?.addEventListener('click', restoreAllTrash);
     d.trashRetention?.addEventListener('change', () => {
         const days = Number(d.trashRetention.value) || 0;
         getSettings().trashRetentionDays = TRASH_RETENTION_OPTIONS.includes(days) ? days : 0;

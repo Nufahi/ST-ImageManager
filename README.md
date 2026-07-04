@@ -29,8 +29,10 @@ out old images fast.
   can restore them later or empty the bin to remove them for good. Optional
   auto-clean purges trashed items older than 7/14/30/90 days. The trashed list
   lives in the extension settings, not on the server.
-- **View** — tap an image to open it full size (images and videos).
-- **Search & sort** — filter by file name, sort by date or name.
+- **View** — tap an image to open it full size (images and videos), flip
+  through the whole view with arrows/swipe, zoom in/out with the +/− controls.
+- **Search & sort** — filter by file name, sort by date, name or file size;
+  filter the folder list when you have many characters.
 - **Mobile friendly** — full-screen layout, collapsible folder list, native
   lazy-loaded thumbnails.
 

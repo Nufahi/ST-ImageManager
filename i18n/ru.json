@@ -43,6 +43,8 @@
   "toolbar.sort.oldest": "Сначала старые",
   "toolbar.sort.az": "А-Я",
   "toolbar.sort.za": "Я-А",
+  "toolbar.sort.sizeBig": "Сначала большие",
+  "toolbar.sort.sizeSmall": "Сначала маленькие",
   "toolbar.pageSizeTitle": "Изображений на странице",
   "toolbar.colsTitle": "Плиток в ряду (нажмите для смены: 2 / 3 / 4)",
   "toolbar.selectAllTitle": "Выбрать ВСЕ изображения в текущем виде (на всех страницах)",
@@ -52,6 +54,7 @@
   "sidebar.resizerTitle": "Потяните для изменения ширины · двойной клик — свернуть",
   "sidebar.title": "Папки",
   "sidebar.subtitle": "Каждая папка — это папка изображений персонажа на сервере.",
+  "sidebar.searchPh": "Найти папку",
 
   "folder.all": "Все изображения",
   "folder.root": "(корень)",
@@ -65,6 +68,8 @@
   "trash.retention.90": "90 дней",
   "trash.empty": "Очистить",
   "trash.emptyTitle": "Безвозвратно удалить всё содержимое корзины",
+  "trash.restoreAll": "Вернуть всё",
+  "trash.restoreAllTitle": "Восстановить все изображения из корзины",
 
   "page.prevTitle": "Предыдущая страница",
   "page.nextTitle": "Следующая страница",

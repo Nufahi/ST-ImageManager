@@ -491,6 +491,28 @@ body.im_modal_open {
     opacity: 0.6;
 }
 
+/* Folder filter box (JS shows it only when the folder list is long). */
+.im_folder_search_wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    margin: 0 0 8px;
+}
+
+.im_folder_search_wrap i {
+    position: absolute;
+    left: 8px;
+    font-size: 0.7rem;
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.im_folder_search_wrap input {
+    width: 100%;
+    padding-left: 24px !important;
+    font-size: 0.8rem;
+}
+
 .im_folder_list {
     display: flex;
     flex-direction: column;
