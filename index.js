@@ -2438,7 +2438,7 @@ async function viewImage(img) {
     renderViewer();
 
     try {
-        const popup = new c.Popup(wrap, c.POPUP_TYPE.DISPLAY, '', { large: true, wide: true, allowVerticalScrolling: true });
+        const popup = new c.Popup(wrap, c.POPUP_TYPE.DISPLAY, '', { allowVerticalScrolling: true });
         popupRef = popup;
         // Tag the popup shell so our CSS can make its body a full-height flex
         // column — that's what lets the image + action bar sit centred in the

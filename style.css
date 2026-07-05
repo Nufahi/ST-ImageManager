@@ -859,41 +859,48 @@ body.im_modal_open {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;   /* center the picture + toolbar vertically */
+    justify-content: center;
     gap: 8px;
-    /* Fill the popup body so the content sits in the middle of the available
-     * space instead of clinging to the top (which felt off-centre, especially
-     * on phones where the image is shorter than the popup). */
-    flex: 1 1 auto;
-    min-height: 100%;
+    /* Size to the content, not the popup — the dialog itself shrink-wraps around
+     * this block (see the `dialog.popup.im_view_popup` rule below), so the
+     * "backing card" hugs the picture + caption + buttons instead of filling
+     * the whole screen. */
     width: 100%;
 }
 
-/* The host popup gets `im_view_popup` from JS once it's shown. Force its body /
- * content wrappers to be full-height flex columns so the wrap above can
- * actually stretch and centre its contents vertically. Scoped to our marker
- * class so other SillyTavern popups are untouched. */
+/* The host popup gets `im_view_popup` from JS once it's shown. Make the whole
+ * dialog shrink-to-fit its content so the backing card is only as big as the
+ * image (+ arrows/caption/toolbar) needs, capped to the viewport. The browser
+ * still centres a fit-content dialog. Scoped to our marker class so other
+ * SillyTavern popups are untouched, and we override ST's wide/large sizing. */
+dialog.popup.im_view_popup {
+    width: fit-content;
+    height: fit-content;
+    max-width: 95dvw;
+    max-height: 95dvh;
+    min-width: 0;
+    min-height: 0;
+}
+
 .im_view_popup .popup-body,
 .im_view_popup .popup-content {
     display: flex;
     flex-direction: column;
-    flex: 1 1 auto;
     min-height: 0;
-    height: 100%;
+    width: fit-content;
+    max-width: 100%;
 }
 
-/* The stage holds the media flanked by the prev/next arrows. It must NOT grow
- * (flex: 0): the WRAP above centres the whole image+caption+toolbar block in
- * the popup, and a non-growing stage keeps the caption and action bar glued
- * right under the picture no matter its size (a growing stage used to swallow
- * all the free space and push the buttons to the very bottom). */
+/* The stage holds the media flanked by the prev/next arrows. It sizes to its
+ * content (fit-content) so the shrink-wrapped popup card hugs the picture — no
+ * stray full-width stage padding the card out to the screen edges. */
 .im_view_stage {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
-    width: 100%;
-    flex: 0 1 auto;
+    width: fit-content;
+    max-width: 100%;
     min-height: 0;
 }
 
@@ -901,7 +908,6 @@ body.im_modal_open {
     display: flex;
     align-items: center;
     justify-content: center;
-    flex: 1 1 auto;
     min-width: 0;
     max-width: 100%;
 }
@@ -910,8 +916,10 @@ body.im_modal_open {
  * wrap becomes a scrollable viewport — drag/scroll to pan around the picture. */
 .im_view_media_wrap.is-zoomed {
     overflow: auto;
-    /* Keep the pannable area within the popup so the toolbar stays reachable. */
+    /* Keep the pannable area within the popup so the toolbar stays reachable
+     * and a zoomed image can't blow the shrink-wrapped card past the screen. */
     max-height: 80vh;
+    max-width: calc(95dvw - 24px);
     align-items: flex-start;        /* let big media start at the top-left */
     justify-content: flex-start;
     -webkit-overflow-scrolling: touch;
@@ -923,9 +931,14 @@ body.im_modal_open {
     flex: 0 0 auto;
 }
 
+/* Cap the media against the VIEWPORT (not the parent): the popup card is
+ * fit-content, so a percentage max-width would be circular. `95dvw - 90px`
+ * leaves room for the two 44px prev/next arrows + gaps on desktop; the
+ * pointer:coarse block below relaxes it to nearly full width since the arrows
+ * are hidden on touch. */
 .im_view_media {
-    max-width: 100%;
-    max-height: 80vh;
+    max-width: calc(95dvw - 90px);
+    max-height: 78dvh;
     border-radius: 8px;
 }
 
@@ -1065,6 +1078,10 @@ body.im_modal_open {
     }
     .im_view_stage {
         gap: 0;
+    }
+    /* No arrows here, so the media can use nearly the full popup width. */
+    .im_view_media {
+        max-width: calc(95dvw - 24px);
     }
     /* Keep the bottom action buttons comfortably tappable on phones. */
     .im_view_tool {
