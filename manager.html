@@ -30,14 +30,7 @@
         <div id="im_select_bar" class="im_select_bar im_hidden">
             <span id="im_select_count" class="im_select_count">0 selected</span>
             <span id="im_select_size" class="im_select_size"></span>
-            <button id="im_select_all" type="button" class="menu_button menu_button_icon interactable" data-i18n-title="select.pageTitle" title="Select all images on this page">
-                <i class="fa-solid fa-check"></i>
-                <span data-i18n="select.page">Page</span>
-            </button>
-            <button id="im_select_all_filtered" type="button" class="menu_button menu_button_icon interactable" data-i18n-title="select.allTitle" title="Select ALL images in the current view (every page)">
-                <i class="fa-solid fa-check-double"></i>
-                <span data-i18n="select.all">All</span>
-            </button>
+            <span id="im_select_protected" class="im_select_protected"></span>
             <button id="im_deselect_all" type="button" class="menu_button menu_button_icon interactable" data-i18n-title="select.cancelTitle" title="Clear selection">
                 <i class="fa-solid fa-xmark"></i>
                 <span data-i18n="select.cancel">Cancel</span>
@@ -46,22 +39,31 @@
                 <i class="fa-solid fa-download"></i>
                 <span data-i18n="select.download">Download</span>
             </button>
-            <button id="im_bulk_hide" type="button" class="menu_button menu_button_icon interactable" data-i18n-title="select.hideTitle" title="Hide selected from this manager (does not delete files)">
-                <i class="fa-solid fa-eye-slash"></i>
-                <span data-i18n="select.hide">Hide</span>
-            </button>
-            <button id="im_bulk_trash" type="button" class="menu_button menu_button_icon interactable" data-i18n-title="select.trashTitle" title="Move selected to the recycle bin (files stay on disk)">
-                <i class="fa-solid fa-trash-arrow-up"></i>
-                <span data-i18n="select.trash">Trash</span>
-            </button>
-            <button id="im_bulk_restore" type="button" class="menu_button menu_button_icon interactable im_hidden" data-i18n-title="select.restoreTitle" title="Restore selected from the recycle bin">
-                <i class="fa-solid fa-rotate-left"></i>
-                <span data-i18n="select.restore">Restore</span>
-            </button>
-            <button id="im_bulk_delete" type="button" class="menu_button menu_button_icon interactable im_btn_danger" data-i18n-title="select.deleteTitle" title="Permanently delete selected files from the server">
-                <i class="fa-solid fa-trash-can"></i>
-                <span data-i18n="select.delete">Delete</span>
-            </button>
+            <details class="im_bulk_more">
+                <summary data-i18n-title="actions.more" title="More actions"><i class="fa-solid fa-ellipsis"></i> <span data-i18n="actions.more">More actions</span></summary>
+                <div class="im_bulk_actions">
+                    <button id="im_select_all" type="button" class="menu_button menu_button_icon interactable" data-i18n-title="select.pageTitle" title="Select all images on this page">
+                        <i class="fa-solid fa-check"></i>
+                        <span data-i18n="select.page">Page</span>
+                    </button>
+                    <button id="im_select_all_filtered" type="button" class="menu_button menu_button_icon interactable" data-i18n-title="select.allTitle" title="Select ALL images in the current view (every page)">
+                        <i class="fa-solid fa-check-double"></i>
+                        <span data-i18n="select.all">All</span>
+                    </button>
+                    <button id="im_bulk_trash" type="button" class="menu_button menu_button_icon interactable" data-i18n-title="select.trashTitle" title="Move selected to the recycle bin (files stay on disk)">
+                        <i class="fa-solid fa-trash-arrow-up"></i>
+                        <span data-i18n="select.trash">Trash</span>
+                    </button>
+                    <button id="im_bulk_restore" type="button" class="menu_button menu_button_icon interactable im_hidden" data-i18n-title="select.restoreTitle" title="Restore selected from the recycle bin">
+                        <i class="fa-solid fa-rotate-left"></i>
+                        <span data-i18n="select.restore">Restore</span>
+                    </button>
+                    <button id="im_bulk_delete" type="button" class="menu_button menu_button_icon interactable im_btn_danger" data-i18n-title="select.deleteTitle" title="Permanently delete selected files from the server">
+                        <i class="fa-solid fa-trash-can"></i>
+                        <span data-i18n="select.delete">Delete</span>
+                    </button>
+                </div>
+            </details>
         </div>
 
         <div class="im_toolbar">
@@ -92,10 +94,6 @@
             <button id="im_toolbar_select_all" type="button" class="menu_button menu_button_icon interactable im_icon_only" data-i18n-title="toolbar.selectAllTitle" title="Select ALL images in the current view (every page)">
                 <i class="fa-solid fa-check-double"></i>
             </button>
-            <label class="im_toggle im_toggle_icon" data-i18n-title="toolbar.showHiddenTitle" title="Show ONLY hidden images">
-                <input id="im_show_hidden" type="checkbox">
-                <i class="fa-solid fa-eye-low-vision"></i>
-            </label>
         </div>
 
         <div class="im_content">
@@ -122,16 +120,8 @@
                 <div class="im_main_header">
                     <div id="im_breadcrumb" class="im_breadcrumb"></div>
                     <div class="im_main_header_actions">
-                        <!-- Trash-only controls: auto-clean retention + empty bin.
-                             Hidden unless the recycle bin view is active. -->
+                        <!-- Manual trash controls. -->
                         <div id="im_trash_controls" class="im_trash_controls im_hidden">
-                            <select id="im_trash_retention" class="text_pole textarea_compact" data-i18n-title="trash.retentionTitle" title="Auto-delete trashed items older than">
-                                <option value="0" data-i18n="trash.retention.never">Keep forever</option>
-                                <option value="7" data-i18n="trash.retention.7">7 days</option>
-                                <option value="14" data-i18n="trash.retention.14">14 days</option>
-                                <option value="30" data-i18n="trash.retention.30">30 days</option>
-                                <option value="90" data-i18n="trash.retention.90">90 days</option>
-                            </select>
                             <button id="im_restore_trash" type="button" class="menu_button menu_button_icon interactable" data-i18n-title="trash.restoreAllTitle" title="Restore everything from the recycle bin">
                                 <i class="fa-solid fa-rotate-left"></i>
                                 <span data-i18n="trash.restoreAll">Restore all</span>

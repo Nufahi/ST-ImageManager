@@ -688,8 +688,14 @@ body.im_modal_open {
     box-shadow: 0 0 0 2px var(--SmartThemeQuoteColor, #6a9cff) inset;
 }
 
-#im_grid .im_card.is-hidden {
-    opacity: 0.5;
+#im_grid .im_card.is-favorite {
+    border-color: #e9bb4f;
+}
+
+.im_favorite_btn[aria-pressed="true"],
+.im_folder_item[data-folder="__favorites__"] i,
+.im_select_protected {
+    color: #e9bb4f;
 }
 
 #im_grid .im_card_thumb {
@@ -759,18 +765,13 @@ body.im_modal_open {
 }
 
 .im_card_actions {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 3;              /* above the (absolutely-positioned) image */
     display: flex;
     justify-content: center;
     flex-wrap: wrap;          /* wrap instead of clipping when the thumb is narrow */
     gap: 4px;
     padding: 5px;
-    background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
-    opacity: 0;
+    background: rgba(0, 0, 0, 0.2);
+    opacity: 1;
     transition: opacity 0.15s;
 }
 
@@ -778,17 +779,12 @@ body.im_modal_open {
     pointer-events: auto;
 }
 
-.im_card_thumb:hover .im_card_actions,
-.im_card:focus-within .im_card_actions {
-    opacity: 1;
-}
-
 .im_card_btn {
     background: rgba(0, 0, 0, 0.55);
     border: none;
     color: #fff;
-    width: 28px;
-    height: 28px;
+    width: 40px;
+    height: 40px;
     flex: 0 0 auto;       /* never let buttons shrink and get clipped */
     border-radius: 6px;
     cursor: pointer;
@@ -1064,12 +1060,7 @@ dialog.popup.im_view_popup {
     border-color: var(--SmartThemeQuoteColor, #6a9cff);
 }
 
-.im_view_delete:hover {
-    background: var(--crimson70a, #b51f1f);
-    border-color: var(--crimson70a, #b51f1f);
-}
-
-@media (max-width: 1000px), (pointer: coarse) {
+@media (pointer: coarse) {
     /* Hide the prev/next arrows on touch devices — swiping the image left/right
      * does the same job and is more natural there, and dropping the arrows lets
      * the picture use the full width of the popup. */
@@ -1267,11 +1258,11 @@ dialog.popup.im_view_popup {
         display: none;
     }
 
-    /* All header buttons are compact icon squares. */
+    /* Thumb-sized controls throughout the mobile header. */
     .im_header_actions .menu_button {
-        min-width: 32px;
-        width: 32px;
-        height: 30px;
+        min-width: 44px;
+        width: 44px;
+        height: 44px;
         padding: 0;
         justify-content: center;
     }
@@ -1295,13 +1286,14 @@ dialog.popup.im_view_popup {
     }
 
     .im_search_wrap input {
-        min-height: 30px;
+        min-height: 44px;
     }
 
-    /* Clean-old / icon buttons stay small squares, never stretch. */
+    /* Toolbar controls keep full-size touch targets. */
     .im_toolbar > .menu_button {
         flex: 0 0 auto;
-        min-height: 30px;
+        min-height: 44px;
+        min-width: 44px;
         justify-content: center;
         padding: 0 8px;
     }
@@ -1321,7 +1313,7 @@ dialog.popup.im_view_popup {
     }
 
     .im_toolbar > select {
-        min-height: 30px;
+        min-height: 44px;
         flex: 0 0 auto;
         max-width: 70px;
     }
@@ -1342,8 +1334,8 @@ dialog.popup.im_view_popup {
     }
 
     .im_select_bar .menu_button {
-        min-width: 34px;
-        min-height: 34px;
+        min-width: 44px;
+        min-height: 44px;
         justify-content: center;
     }
 
@@ -1352,6 +1344,21 @@ dialog.popup.im_view_popup {
         padding: 3px 8px;
         gap: 4px 8px;
         flex-wrap: wrap;       /* let the size summary sit on its own line */
+    }
+
+    .im_main_header_actions {
+        flex: 1 1 100%;
+        min-width: 0;
+        flex-wrap: wrap;
+        justify-content: space-between;
+    }
+
+    .im_trash_controls .menu_button {
+        min-height: 44px;
+    }
+
+    #im_page_select {
+        height: 44px;
     }
 
     /* Count + total MB — always readable on phones. */
@@ -1364,8 +1371,8 @@ dialog.popup.im_view_popup {
     }
 
     .im_page_controls .menu_button {
-        min-width: 34px;
-        min-height: 34px;
+        min-width: 44px;
+        min-height: 44px;
     }
 
     /* ---- Sidebar overlays the grid; the toggle shows it ---- */
@@ -1391,7 +1398,7 @@ dialog.popup.im_view_popup {
         align-self: flex-start;
         margin: 6px 8px 0;
         padding: 8px 12px;
-        min-height: 38px;
+        min-height: 44px;
         background: rgba(255, 255, 255, 0.05);
         border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.12));
         border-radius: 8px;
@@ -1416,7 +1423,7 @@ dialog.popup.im_view_popup {
        squeezes the thumbnails. */
     .im_sidebar {
         position: absolute;
-        top: 44px;
+        top: 50px;
         left: 8px;
         right: 8px;
         z-index: 30;
@@ -1434,7 +1441,7 @@ dialog.popup.im_view_popup {
     }
 
     .im_folder_item {
-        min-height: 42px; /* easy tap targets */
+        min-height: 44px;
     }
 
     /* ---- Grid: user-chosen 2/3/4 cards per row on phones ----
@@ -1444,7 +1451,7 @@ dialog.popup.im_view_popup {
        desktop #im_grid rules. */
     #im_grid.im_grid {
         /* N even columns that always fill the width. */
-        grid-template-columns: repeat(var(--im-cols, 2), 1fr);
+        grid-template-columns: repeat(var(--im-cols, 2), minmax(0, 1fr));
         gap: 8px;
         padding: 8px;
     }
@@ -1466,34 +1473,40 @@ dialog.popup.im_view_popup {
         min-height: calc(144vw / var(--im-cols, 2));
     }
 
-    /* No hover on touch — always show the action buttons (overlaid). The
-       buttons scale DOWN as the column count grows so they don't cover the
-       whole thumbnail at 3-4 cards per row. */
+    /* Keep both actions easy to hit, even in a dense grid (wrap if needed). */
     .im_card_actions {
         opacity: 1;
-        gap: calc(10px / var(--im-cols, 2));
-        padding: calc(10px / var(--im-cols, 2));
+        gap: 2px;
+        padding: 2px;
         justify-content: center;
-        flex-wrap: nowrap;
+        flex-wrap: wrap;
     }
 
     .im_card_btn {
-        /* ~38px at 2 cols, ~25px at 3, ~19px at 4 (with a tap-friendly floor). */
-        width: clamp(22px, calc(76px / var(--im-cols, 2)), 38px);
-        height: clamp(22px, calc(76px / var(--im-cols, 2)), 38px);
-        font-size: clamp(0.6rem, calc(1.8rem / var(--im-cols, 2)), 1rem);
+        width: 44px;
+        height: 44px;
+        font-size: 1rem;
+    }
+
+    .im_card_check {
+        top: 2px;
+        left: 2px;
+        width: 44px;
+        height: 44px;
+        align-items: center;
+        justify-content: center;
     }
 
     .im_card_check input {
-        width: clamp(16px, calc(44px / var(--im-cols, 2)), 22px);
-        height: clamp(16px, calc(44px / var(--im-cols, 2)), 22px);
+        width: 22px;
+        height: 22px;
     }
 }
 
 /* ---------- Recycle bin ----------
  * The trash folder entry in the sidebar gets a subtle reddish tint so it reads
  * as a "danger / cleanup" destination, and the trash-only header controls
- * (retention selector + Empty button) line up next to the page controls. */
+ * line up next to the page controls. */
 .im_folder_item[data-folder="__trash__"] i {
     color: var(--fullred, #c0392b);
     opacity: 0.85;
@@ -1505,26 +1518,138 @@ dialog.popup.im_view_popup {
 
 .im_trash_controls {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 6px;
-}
-
-.im_trash_controls select {
-    max-width: 130px;
-}
-
-/* The viewer's "move to trash" / "restore" tools share the round tool look but
-   get their own hover accents so the destructive vs. restorative intent reads. */
-.im_view_restore:hover {
-    color: var(--SmartThemeQuoteColor, #6a9cff);
 }
 
 /* Narrow phones: honour the chosen column count, just with tighter gaps to
    save width. */
 @media (max-width: 480px) {
     #im_grid.im_grid {
-        grid-template-columns: repeat(var(--im-cols, 2), 1fr);
+        grid-template-columns: repeat(var(--im-cols, 2), minmax(0, 1fr));
         gap: 6px;
         padding: 6px;
+    }
+}
+
+/* Action sheet lives in the browser's top layer, above the image popup. */
+dialog.im_action_dialog {
+    box-sizing: border-box;
+    width: min(420px, calc(100vw - 24px));
+    max-height: 85vh;
+    max-height: 85dvh;
+    margin: auto;
+    padding: 16px;
+    border: 1px solid var(--SmartThemeBorderColor, #555);
+    border-radius: 16px;
+    background: var(--SmartThemeBlurTintColor, #1a1a1a);
+    color: var(--SmartThemeBodyColor, #eee);
+    overflow: auto;
+}
+
+.im_action_dialog::backdrop {
+    background: rgba(0, 0, 0, 0.6);
+}
+
+.im_action_dialog h3 {
+    margin: 0 0 12px;
+    font-size: 1rem;
+    overflow-wrap: anywhere;
+}
+
+.im_action_list {
+    display: grid;
+    gap: 8px;
+}
+
+.im_action_item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 48px;
+    padding: 12px;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    background: rgba(127, 127, 127, 0.12);
+    border: 1px solid var(--SmartThemeBorderColor, #555);
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+.im_action_item span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.im_action_item.im_btn_danger {
+    color: #ff8585;
+}
+
+.im_action_item:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.im_action_cancel {
+    margin-top: 12px;
+    justify-content: center;
+}
+
+.im_bulk_more {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.im_bulk_more summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    width: fit-content;
+    padding: 0 12px;
+    border: 1px solid var(--SmartThemeBorderColor, #555);
+    border-radius: 8px;
+    cursor: pointer;
+    list-style: none;
+}
+
+.im_bulk_more summary::-webkit-details-marker {
+    display: none;
+}
+
+.im_bulk_actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-top: 8px;
+}
+
+#im_select_bar .im_bulk_actions .menu_button span {
+    display: inline;
+}
+
+.im_select_protected {
+    font-size: 0.8rem;
+}
+
+#im_modal :is(button, input, select, summary, [role="button"]):focus-visible,
+.im_action_dialog button:focus-visible,
+.im_view_wrap :is(button, label):focus-within {
+    outline: 2px solid var(--SmartThemeQuoteColor, #6a9cff);
+    outline-offset: -2px;
+}
+
+@media (max-width: 600px) {
+    dialog.im_action_dialog {
+        margin: auto auto max(12px, env(safe-area-inset-bottom));
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #im_modal *, .im_view_wrap * {
+        transition: none;
     }
 }

@@ -28,8 +28,6 @@
   "select.cancelTitle": "Clear selection",
   "select.download": "Download",
   "select.downloadTitle": "Download selected files (bundled into a .zip on desktop)",
-  "select.hide": "Hide",
-  "select.hideTitle": "Hide selected from this manager (does not delete files)",
   "select.trash": "Trash",
   "select.trashTitle": "Move selected to the recycle bin (files stay on disk, restorable)",
   "select.restore": "Restore",
@@ -48,7 +46,6 @@
   "toolbar.pageSizeTitle": "Images per page",
   "toolbar.colsTitle": "Cards per row (tap to change: 2 / 3 / 4)",
   "toolbar.selectAllTitle": "Select ALL images in the current view (every page)",
-  "toolbar.showHiddenTitle": "Show ONLY hidden images (toggle off to return to normal images)",
 
   "sidebar.toggleAria": "Toggle folder sidebar",
   "sidebar.resizerTitle": "Drag to resize · double-click to collapse",
@@ -58,13 +55,15 @@
   "folder.all": "All images",
   "folder.root": "(root)",
   "folder.trash": "Recycle bin",
+  "folder.favorites": "Favorites",
+  "favorite.add": "Add to favorites — pin and protect from deletion",
+  "favorite.remove": "Remove from favorites — unprotect",
+  "favorite.protected": "Favorites skipped: remove the star first to delete or move them to the recycle bin.",
+  "favorite.selected": "⭐ Protected: {{count}}",
+  "favorite.busy": "This file is already being deleted. Wait for the operation to finish.",
+  "actions.more": "More actions",
+  "toast.loadFailed": "Could not load every folder. Try refreshing again — favorites and recycle bin records are preserved.",
 
-  "trash.retentionTitle": "Auto-delete trashed items older than",
-  "trash.retention.never": "Keep forever",
-  "trash.retention.7": "7 days",
-  "trash.retention.14": "14 days",
-  "trash.retention.30": "30 days",
-  "trash.retention.90": "90 days",
   "trash.empty": "Empty",
   "trash.emptyTitle": "Permanently delete everything in the recycle bin",
   "trash.restoreAll": "Restore all",
@@ -79,8 +78,7 @@
   "empty.none": "No images here. Nothing to clean!",
 
   "card.selectTitle": "Select",
-  "card.hideTitle": "Hide from manager",
-  "card.unhideTitle": "Unhide",
+  "card.open": "Open: {{file}}",
   "card.deleteTitle": "Delete file permanently",
   "card.trashTitle": "Move to recycle bin",
   "card.restoreTitle": "Restore from recycle bin",
@@ -88,7 +86,7 @@
   "card.openFolder": "Open folder: {{folder}}",
 
   "breadcrumb.sharedHint": "SillyTavern keeps one image folder per character NAME. Different characters with the same name share this folder — that's a server limitation, not a bug. Tip: sort by Name or use search to group a single bot's files (they have different prefixes).",
-  "breadcrumb.trashHint": "Items here are NOT yet removed from disk — they still take up space. Restore them, or use Empty / Delete to remove them for good. Auto-clean can purge old items after the chosen number of days.",
+  "breadcrumb.trashHint": "Files in the recycle bin use disk space until you manually delete them. You can restore them or add them to favorites.",
 
   "summary.images.one": "{{count}} image",
   "summary.images.many": "{{count}} images",
@@ -99,13 +97,10 @@
 
   "wand.title": "Open the Image Manager to browse and clean stored images",
 
-  "toast.hidden": "{{count}} image(s) hidden.",
-
   "toast.trashed.one": "Moved to the recycle bin.",
   "toast.trashed.many": "Moved {{count}} image(s) to the recycle bin.",
   "toast.restored.one": "Restored from the recycle bin.",
   "toast.restored.many": "Restored {{count}} image(s).",
-  "toast.autoCleaned": "Auto-cleaned {{count}} old item(s) from the recycle bin.",
   "toast.purgeConfirm.titleOne": "Delete this image permanently?",
   "toast.purgeConfirm.titleMany": "Permanently delete {{count}} image(s)?",
   "toast.emptyConfirm.title": "Empty the recycle bin ({{count}})?",
