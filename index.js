@@ -1458,9 +1458,9 @@ function cardHtml(img, favorites) {
         : '';
 
     const favoriteTitle = t(favorite ? 'favorite.remove' : 'favorite.add');
-    const trashTitle = t(inTrashView() ? 'card.restoreTitle' : 'card.trashTitle');
+    const deleteTitle = t('card.deleteTitle');
     const actions = `<button type="button" class="im_card_btn im_favorite_btn" data-act="favorite" aria-pressed="${favorite}" title="${escapeHtml(favoriteTitle)}" aria-label="${escapeHtml(favoriteTitle)}"><i class="${favorite ? 'fa-solid' : 'fa-regular'} fa-star"></i></button>
-        <button type="button" class="im_card_btn" data-act="trash" ${favorite && !inTrashView() ? 'disabled' : ''} title="${escapeHtml(trashTitle)}" aria-label="${escapeHtml(trashTitle)}"><i class="fa-solid ${inTrashView() ? 'fa-rotate-left' : 'fa-trash-arrow-up'}"></i></button>
+        <button type="button" class="im_card_btn im_card_btn_danger" data-act="delete" ${favorite ? 'disabled' : ''} title="${escapeHtml(deleteTitle)}" aria-label="${escapeHtml(deleteTitle)}"><i class="fa-solid fa-trash-can"></i></button>
         <button type="button" class="im_card_btn" data-act="more" aria-haspopup="dialog" title="${escapeHtml(t('actions.more'))}" aria-label="${escapeHtml(t('actions.more'))}"><i class="fa-solid fa-ellipsis"></i></button>`;
 
     return `<div class="im_card${selected}${favorite ? ' is-favorite' : ''}" data-path="${escapeHtml(img.path)}">
@@ -1539,10 +1539,7 @@ function wireCard(card) {
             e.stopPropagation();
             const act = btn.dataset.act;
             if (act === 'favorite') toggleFavorite(path);
-            else if (act === 'trash') {
-                if (inTrashView()) restoreOne(img);
-                else trashOne(img);
-            }
+            else if (act === 'delete') deleteOneConfirmed(img, inTrashView());
             else if (act === 'more') showImageActions(img);
         });
     });
