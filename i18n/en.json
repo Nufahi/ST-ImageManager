@@ -56,6 +56,8 @@
   "folder.root": "(root)",
   "folder.trash": "Recycle bin",
   "folder.favorites": "Favorites",
+  "folder.size": "Total size of files in this view (recycle bin counted separately)",
+  "folder.sizePartial": "Approximate size: some files have not been measured or their size is unavailable. Refresh to retry.",
   "favorite.add": "Add to favorites — pin and protect from deletion",
   "favorite.remove": "Remove from favorites — unprotect",
   "favorite.protected": "Favorites skipped: remove the star first to delete or move them to the recycle bin.",

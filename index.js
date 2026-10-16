@@ -853,8 +853,10 @@ async function apiDeleteImage(userRelativePath) {
 async function fetchSize(url) {
     try {
         const res = await fetch(url, { method: 'HEAD', headers: reqHeaders({}) });
+        if (!res.ok) return null;
         const len = res.headers.get('content-length');
-        if (len != null) return Number(len);
+        const size = len?.trim() ? Number(len) : NaN;
+        if (Number.isFinite(size) && size >= 0) return size;
     } catch (error) {
         /* ignore — size just stays unknown */
     }
@@ -1004,10 +1006,10 @@ function queueVisibleSizes() {
     runSizeQueue();
 }
 
-/** Enqueue size lookups for EVERY image in the current folder/search view, so
- *  the summary can show the real total size (in MB). Throttled by runSizeQueue. */
+/** Prioritise the current view, then measure other folders for sidebar totals.
+ *  Only HEAD requests, throttled by runSizeQueue and stopped on close. */
 function queueFolderSizes() {
-    for (const img of getFilteredImages()) {
+    for (const img of [...getFilteredImages(), ...state.images]) {
         if (!state.sizeCache.has(img.path) && !state.sizeQueued.has(img.path)) {
             state.sizeQueue.push(img.path);
             state.sizeQueued.add(img.path);
@@ -1044,6 +1046,7 @@ async function runSizeQueue() {
                 sinceRefresh = 0;
                 updateViewSummaryText();
                 updateStorageSummary();
+                updateFolderStats();
             }
         }
     };
@@ -1068,6 +1071,7 @@ async function runSizeQueue() {
     }
     renderPageControls();
     updateStorageSummary();
+    updateFolderStats();
 }
 
 function updateCardSize(path, size) {
@@ -1232,20 +1236,53 @@ function renderLoading(show) {
     state.dom.loading.classList.toggle('im_hidden', !show);
 }
 
+/** Match sidebar counts to each view; trashed files count only in the bin. */
+function getFolderStats() {
+    const stats = new Map();
+    const favorites = getFavoriteSet();
+    const trashed = getTrashSet();
+    const add = (folder, size) => {
+        let entry = stats.get(folder);
+        if (!entry) stats.set(folder, entry = { count: 0, bytes: 0, known: 0, pending: 0 });
+        entry.count++;
+        if (size === undefined) entry.pending++;
+        if (Number.isFinite(size) && size >= 0) {
+            entry.bytes += size;
+            entry.known++;
+        }
+    };
+    for (const img of state.images) {
+        const size = state.sizeCache.get(img.path);
+        if (trashed.has(img.path)) add(TRASH_FOLDER, size);
+        else {
+            add(ALL_FOLDERS, size);
+            add(img.folder, size);
+            if (favorites.has(img.path)) add(FAVORITES_FOLDER, size);
+        }
+    }
+    return stats;
+}
+
+/** Text-only updates preserve sidebar focus and scroll during background scans. */
+function updateFolderStats() {
+    const list = state.dom.folderList;
+    if (!list) return;
+    const stats = getFolderStats();
+    list.querySelectorAll('.im_folder_item').forEach(button => {
+        const entry = stats.get(button.dataset.folder) || { count: 0, bytes: 0, known: 0, pending: 0 };
+        let size = humanSize(entry.bytes);
+        if (entry.count && !entry.known) size = entry.pending ? '…' : '—';
+        else if (entry.known < entry.count) size = `~${size}${entry.pending ? '…' : ''}`;
+        button.querySelector('.im_folder_count').textContent = entry.count;
+        const label = button.querySelector('.im_folder_size');
+        label.textContent = size;
+        label.title = t(entry.known < entry.count ? 'folder.sizePartial' : 'folder.size');
+    });
+}
+
 function renderFolders() {
     const list = state.dom.folderList;
     if (!list) return;
-    const favorites = getFavoriteSet();
-    const trashed = getTrashSet();
-
-    const countFor = (folderName) => state.images.filter((img) => {
-        const isTrashedImg = trashed.has(img.path);
-        if (folderName === TRASH_FOLDER) return isTrashedImg;
-        if (isTrashedImg) return false; // trashed items never show in normal folders
-        if (folderName === FAVORITES_FOLDER) return favorites.has(img.path);
-        if (folderName !== ALL_FOLDERS && img.folder !== folderName) return false;
-        return true;
-    }).length;
 
     // Toolbar folder finder: narrows the sidebar folder list down by name.
     const folderQuery = state.folderSearch.trim().toLowerCase();
@@ -1264,17 +1301,17 @@ function renderFolders() {
 
     list.innerHTML = entries.map((e) => {
         const active = e.name === state.activeFolder ? ' is-active' : '';
-        const count = countFor(e.name);
         return `<button type="button" class="im_folder_item${active}" data-folder="${escapeHtml(e.name)}" title="${escapeHtml(e.label)}">
             <i class="fa-solid ${e.icon}"></i>
             <span class="im_folder_name">${escapeHtml(e.label)}</span>
-            <span class="im_folder_count">${count}</span>
+            <span class="im_folder_stats"><span class="im_folder_count"></span><span class="im_folder_size"></span></span>
         </button>`;
     }).join('');
 
     list.querySelectorAll('.im_folder_item').forEach((btn) => {
         btn.addEventListener('click', () => selectFolder(btn.dataset.folder));
     });
+    updateFolderStats();
 }
 
 /** Switch the active folder view and refresh everything. Shared by the sidebar
@@ -1421,7 +1458,9 @@ function cardHtml(img, favorites) {
         : '';
 
     const favoriteTitle = t(favorite ? 'favorite.remove' : 'favorite.add');
+    const trashTitle = t(inTrashView() ? 'card.restoreTitle' : 'card.trashTitle');
     const actions = `<button type="button" class="im_card_btn im_favorite_btn" data-act="favorite" aria-pressed="${favorite}" title="${escapeHtml(favoriteTitle)}" aria-label="${escapeHtml(favoriteTitle)}"><i class="${favorite ? 'fa-solid' : 'fa-regular'} fa-star"></i></button>
+        <button type="button" class="im_card_btn" data-act="trash" ${favorite && !inTrashView() ? 'disabled' : ''} title="${escapeHtml(trashTitle)}" aria-label="${escapeHtml(trashTitle)}"><i class="fa-solid ${inTrashView() ? 'fa-rotate-left' : 'fa-trash-arrow-up'}"></i></button>
         <button type="button" class="im_card_btn" data-act="more" aria-haspopup="dialog" title="${escapeHtml(t('actions.more'))}" aria-label="${escapeHtml(t('actions.more'))}"><i class="fa-solid fa-ellipsis"></i></button>`;
 
     return `<div class="im_card${selected}${favorite ? ' is-favorite' : ''}" data-path="${escapeHtml(img.path)}">
@@ -1500,6 +1539,10 @@ function wireCard(card) {
             e.stopPropagation();
             const act = btn.dataset.act;
             if (act === 'favorite') toggleFavorite(path);
+            else if (act === 'trash') {
+                if (inTrashView()) restoreOne(img);
+                else trashOne(img);
+            }
             else if (act === 'more') showImageActions(img);
         });
     });

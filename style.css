@@ -524,6 +524,7 @@ body.im_modal_open {
 
 .im_folder_name {
     flex: 1;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -535,6 +536,21 @@ body.im_modal_open {
     background: rgba(255, 255, 255, 0.08);
     padding: 1px 7px;
     border-radius: 10px;
+}
+
+.im_folder_stats {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 3px;
+}
+
+.im_folder_size {
+    font-size: 0.72rem;
+    opacity: 0.8;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
 }
 
 .im_sidebar_toggle {
@@ -773,6 +789,11 @@ body.im_modal_open {
     background: rgba(0, 0, 0, 0.2);
     opacity: 1;
     transition: opacity 0.15s;
+}
+
+.im_card_btn:disabled {
+    opacity: 0.4;
+    cursor: default;
 }
 
 .im_card_btn {
@@ -1473,7 +1494,7 @@ dialog.popup.im_view_popup {
         min-height: calc(144vw / var(--im-cols, 2));
     }
 
-    /* Keep both actions easy to hit, even in a dense grid (wrap if needed). */
+    /* Keep all three actions easy to hit, even in a dense grid (wrap if needed). */
     .im_card_actions {
         opacity: 1;
         gap: 2px;
