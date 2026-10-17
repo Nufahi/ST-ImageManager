@@ -59,8 +59,10 @@ out old images fast.
 
 Visibility is checked against **the entire currently open chat**, including
 messages above the scroll position and older messages not yet rendered on screen.
-The filter reads the active message text (formatted Markdown/HTML) and image/video
-attachments. Inactive message swipes and unselected images in a media gallery
+For rendered messages, the filter reads the actual picture currently displayed
+in the chat, including replacements made by third-party generators. For older
+messages not yet rendered, it reads the active text and image/video attachments.
+Inactive message swipes and unselected images in a media gallery
 count as not visible; a media list counts all its displayed attachments.
 It refreshes when the chat changes, when messages/images change, and on **Refresh**.
 Changing the visibility filter clears the selection.

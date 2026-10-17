@@ -263,15 +263,44 @@ function chatImagePath(value) {
  * Inactive text swipes and gallery alternatives deliberately do not count. */
 function collectChatImagePaths(c) {
     const chatId = typeof c.getCurrentChatId === 'function' ? c.getCurrentChatId() : c.chatId;
-    if (chatId == null || chatId === '' || !Array.isArray(c.chat)) return null;
+    const renderedMessages = new Map();
+    document.querySelectorAll('#chat .mes[mesid]').forEach(message => {
+        renderedMessages.set(Number(message.getAttribute('mesid')), message);
+    });
+    if (!Array.isArray(c.chat)) return null;
+    if ((chatId == null || chatId === '') && !c.chat.length && !renderedMessages.size) return null;
     const paths = new Set();
     const add = value => {
         const path = chatImagePath(value);
         if (path) paths.add(path);
     };
+    const collectMedia = (root, live) => {
+        root.querySelectorAll('img, video, video source').forEach(media => {
+            // Check visibility within the message, not intersection with the
+            // viewport: scrolling or opening the manager must not change it.
+            for (let el = media; el; el = el.parentElement) {
+                const style = live ? getComputedStyle(el) : el.style;
+                if (el.hidden || style.display === 'none' || style.visibility === 'hidden') return;
+                if (live && el.classList.contains('mes')) break;
+            }
+            add(media.getAttribute('src'));
+            add(media.getAttribute('data-src'));
+            if (live && !media.getAttribute('src')) add(media.currentSrc);
+            if (media.tagName === 'VIDEO') add(media.getAttribute('poster'));
+        });
+    };
     // A template is inert: parsing formatted messages does not load their media.
     const template = document.createElement('template');
     c.chat.forEach((message, index) => {
+        const rendered = renderedMessages.get(index);
+        if (rendered) {
+            // The live message is authoritative. Image generators may replace
+            // its picture without updating extra.image/media or the raw text.
+            // Do not merge stale metadata (including reroll history) back in.
+            rendered.querySelectorAll('.mes_text, .mes_media_wrapper, .mes_img_container, .mes_video_container')
+                .forEach(root => collectMedia(root, true));
+            return;
+        }
         const extra = message.extra || {};
         let hasMedia = false;
         if (Array.isArray(extra.media)) {
@@ -292,19 +321,11 @@ function collectChatImagePaths(c) {
             hasMedia = Boolean(extra.image || extra.video);
         }
         if (hasMedia && extra.inline_image === false) return;
-        if (!message.mes) return;
+        const text = extra.display_text ?? message.mes;
+        if (!text) return;
         if (typeof c.messageFormatting !== 'function') throw new Error('Message formatter unavailable');
-        template.innerHTML = c.messageFormatting(message.mes, message.name, message.is_system, message.is_user, index);
-        template.content.querySelectorAll('img, video, video source').forEach(media => {
-            // Ignore explicitly hidden markup, while retaining off-screen and
-            // collapsed/spoiler content which the user can still open.
-            for (let el = media; el; el = el.parentElement) {
-                if (el.hidden || el.style.display === 'none' || el.style.visibility === 'hidden') return;
-            }
-            add(media.getAttribute('src'));
-            add(media.getAttribute('data-src'));
-            if (media.tagName === 'VIDEO') add(media.getAttribute('poster'));
-        });
+        template.innerHTML = c.messageFormatting(text, message.name, message.is_system, message.is_user, index);
+        collectMedia(template.content, false);
     });
     return paths;
 }
@@ -361,6 +382,19 @@ function bindChatImageEvents() {
             queueVisibleSizes();
         }
     };
+    const scheduleRefresh = () => {
+        if (!state.isOpen) return;
+        clearTimeout(timer);
+        timer = setTimeout(refresh, 100);
+    };
+    // Third-party generators can change src/markup without emitting ST events.
+    const chat = document.getElementById('chat');
+    if (chat) {
+        new MutationObserver(scheduleRefresh).observe(chat, {
+            subtree: true, childList: true, attributes: true,
+            attributeFilter: ['src', 'srcset', 'data-src', 'class', 'style', 'hidden'],
+        });
+    }
     for (const name of [
         'CHAT_CHANGED', 'CHAT_LOADED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED',
         'MESSAGE_UPDATED', 'MESSAGE_EDITED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED',
@@ -375,8 +409,7 @@ function bindChatImageEvents() {
                 refresh();
                 renderSelectBar();
             }
-            clearTimeout(timer);
-            timer = setTimeout(refresh, 100);
+            scheduleRefresh();
         });
     }
 }
@@ -1874,6 +1907,7 @@ function toggleSelect(path, on) {
 }
 
 function selectAllVisible() {
+    syncSelectionToView();
     for (const img of getPageImages()) state.selected.add(img.path);
     renderGrid();
     renderSelectBar();
@@ -1882,9 +1916,22 @@ function selectAllVisible() {
 /** Select EVERY image that matches the current folder/search/filter — across
  *  all pages, not just the one on screen. */
 function selectAllFiltered() {
-    for (const img of getFilteredImages()) state.selected.add(img.path);
+    syncSelectionToView();
+    state.selected = new Set(getFilteredImages().map(img => img.path));
     renderGrid();
     renderSelectBar();
+}
+
+/** Never let an old selection or a pending chat update expand a bulk action. */
+function syncSelectionToView() {
+    const selected = new Set(state.selected);
+    const value = state.dom.chatFilter?.value;
+    if (CHAT_FILTERS.includes(value)) state.chatFilter = value;
+    refreshChatImages();
+    const allowed = new Set(getFilteredImages().map(img => img.path));
+    state.selected = new Set([...selected].filter(path => allowed.has(path)));
+    render();
+    return [...state.selected];
 }
 
 function clearSelection() {
@@ -1969,7 +2016,7 @@ async function deleteOneConfirmed(img, purging) {
 /** Move the current selection into the recycle bin. */
 function bulkTrash() {
     if (!state.selected.size) return;
-    const paths = unprotectedPaths([...state.selected]);
+    const paths = unprotectedPaths(syncSelectionToView());
     if (!paths.length) return;
     const added = addPathsToTrash(paths);
     toastr.info(t('toast.trashed.many', { count: added }));
@@ -1981,7 +2028,7 @@ function bulkTrash() {
 /** Restore the current selection from the recycle bin. */
 function bulkRestore() {
     if (!state.selected.size) return;
-    const n = restorePathsFromTrash([...state.selected]);
+    const n = restorePathsFromTrash(syncSelectionToView());
     toastr.success(t('toast.restored.many', { count: n }));
     state.selected.clear();
     render();
@@ -2003,6 +2050,7 @@ function restoreAllTrash() {
 
 /** Empty the filtered recycle bin (permanently delete the matching files). */
 async function emptyTrash() {
+    syncSelectionToView();
     const trashed = getTrashSet();
     const trashPaths = unprotectedPaths(getFilteredImages().filter(img => trashed.has(img.path)).map(img => img.path));
     if (!trashPaths.length) return;
@@ -2028,7 +2076,7 @@ async function bulkPurgeSelected() {
     if (!state.selected.size) return;
     const c = ctx();
     const trash = getTrashSet();
-    const paths = unprotectedPaths([...state.selected].filter(p => trash.has(p)));
+    const paths = unprotectedPaths(syncSelectionToView().filter(p => trash.has(p)));
     if (!paths.length) return;
     const confirmed = await c.Popup.show.confirm(
         t('toast.purgeConfirm.titleMany', { count: paths.length }),
@@ -2041,13 +2089,17 @@ async function bulkPurgeSelected() {
 /** Shared worker: delete the given paths from the server, then drop them from
  *  the trash list + in-memory state. Used by Empty-trash and bulk purge. */
 async function purgePaths(paths) {
-    paths = unprotectedPaths(paths);
+    syncSelectionToView();
+    const allowed = new Set(getFilteredImages().map(img => img.path));
+    paths = unprotectedPaths(paths.filter(path => allowed.has(path)));
     if (!paths.length) return;
     let failed = 0;
     const deleted = [];
     toastr.info(t('toast.deleting', { count: paths.length }));
     for (const path of paths) {
         if (isFavorite(path)) continue;
+        const img = state.imageByPath.get(path);
+        if (!img || !matchesChatFilter(img)) continue;
         const ok = await apiDeleteImage(path);
         if (ok) deleted.push(path);
         else failed++;
@@ -2665,7 +2717,7 @@ async function viewImage(img) {
 async function bulkDelete() {
     if (!state.selected.size) return;
     const c = ctx();
-    const paths = unprotectedPaths([...state.selected]);
+    const paths = unprotectedPaths(syncSelectionToView());
     if (!paths.length) return;
     let knownSize = 0;
     for (const p of paths) {
