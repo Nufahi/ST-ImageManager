@@ -66,6 +66,11 @@
                 <i class="fa-solid fa-folder-open"></i>
                 <input id="im_folder_search" type="search" class="text_pole textarea_compact" data-i18n-placeholder="toolbar.folderSearchPh" placeholder="Find folder">
             </div>
+            <select id="im_chat_filter" class="text_pole textarea_compact" data-i18n-title="toolbar.chatFilterTitle" data-i18n-aria-label="toolbar.chatFilterAria" aria-label="Chat visibility" title="Filter by visibility in the current chat">
+                <option value="all" data-i18n="toolbar.chatFilter.all">All images</option>
+                <option value="visible" data-i18n="toolbar.chatFilter.visible">Visible in chat</option>
+                <option value="not-visible" data-i18n="toolbar.chatFilter.notVisible">Not visible in chat</option>
+            </select>
             <select id="im_sort" class="text_pole textarea_compact" data-i18n-title="toolbar.sortTitle" title="Sort images">
                 <option value="date-desc" data-i18n="toolbar.sort.newest">Newest</option>
                 <option value="date-asc" data-i18n="toolbar.sort.oldest">Oldest</option>

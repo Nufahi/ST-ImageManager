@@ -348,7 +348,8 @@ body.im_modal_open {
     padding-block: 0;
 }
 
-/* Sort / page-size selects: keep them small, sized to content. */
+/* Toolbar selects: keep them small, sized to content. */
+#im_chat_filter,
 #im_sort,
 #im_page_size {
     flex: 0 0 auto;
@@ -1337,6 +1338,11 @@ dialog.popup.im_view_popup {
         min-height: 44px;
         flex: 0 0 auto;
         max-width: 70px;
+    }
+
+    #im_chat_filter {
+        flex: 1 1 160px;
+        max-width: 100%;
     }
 
     .im_toggle {

@@ -128,6 +128,7 @@ const TRASH_FOLDER = '__trash__'; // virtual view: images soft-deleted into the 
 const FAVORITES_FOLDER = '__favorites__';
 
 const PAGE_SIZE_OPTIONS = Object.freeze([10, 20, 30, 60, 120, 240]);
+const CHAT_FILTERS = Object.freeze(['all', 'visible', 'not-visible']);
 
 const VIDEO_EXTENSIONS = ['mp4', 'webm', 'ogv', 'mov', 'mkv'];
 
@@ -193,6 +194,9 @@ const state = {
     filterCache: null,      // memoised getFilteredImages() result (see below)
     sizeCache: new Map(), // path -> bytes (lazily filled)
     activeFolder: ALL_FOLDERS,
+    chatFilter: 'all',
+    chatImagePaths: new Set(),
+    chatImagesReady: false,
     autoFolderPending: false, // jump to current character's folder on next load
     folderSearch: '',   // toolbar folder finder (filters the sidebar list)
     sort: DEFAULT_SETTINGS.sort,
@@ -239,6 +243,141 @@ function getCurrentCharFolder() {
         return (typeof name === 'string' && name.trim()) ? name : null;
     } catch (e) {
         return null;
+    }
+}
+
+/** Canonical server path; ignore query/hash and never match another host. */
+function chatImagePath(value) {
+    if (typeof value !== 'string' || !value.trim()) return null;
+    try {
+        const url = new URL(value, document.baseURI);
+        if (url.origin !== location.origin) return null;
+        const path = decodeURIComponent(url.pathname).replace(/^\/+/, '');
+        return path.startsWith('user/images/') ? path : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+/** Read active messages, not just the rendered/virtualised part of #chat.
+ * Inactive text swipes and gallery alternatives deliberately do not count. */
+function collectChatImagePaths(c) {
+    const chatId = typeof c.getCurrentChatId === 'function' ? c.getCurrentChatId() : c.chatId;
+    if (chatId == null || chatId === '' || !Array.isArray(c.chat)) return null;
+    const paths = new Set();
+    const add = value => {
+        const path = chatImagePath(value);
+        if (path) paths.add(path);
+    };
+    // A template is inert: parsing formatted messages does not load their media.
+    const template = document.createElement('template');
+    c.chat.forEach((message, index) => {
+        const extra = message.extra || {};
+        let hasMedia = false;
+        if (Array.isArray(extra.media)) {
+            hasMedia = extra.media.length > 0;
+            const display = extra.media_display || c.powerUserSettings?.media_display || 'list';
+            const mediaIndex = Number(extra.media_index);
+            const activeIndex = Number.isInteger(mediaIndex) && mediaIndex >= 0 && mediaIndex < extra.media.length
+                ? mediaIndex : 0;
+            const media = display === 'gallery' ? [extra.media[activeIndex]] : extra.media;
+            for (const item of media) {
+                if (item && item.type !== 'audio') add(item.url);
+            }
+        } else {
+            // Older ST: extra.image is the currently displayed image, whereas
+            // extra.image_swipes holds every generated alternative.
+            add(extra.image);
+            add(extra.video);
+            hasMedia = Boolean(extra.image || extra.video);
+        }
+        if (hasMedia && extra.inline_image === false) return;
+        if (!message.mes) return;
+        if (typeof c.messageFormatting !== 'function') throw new Error('Message formatter unavailable');
+        template.innerHTML = c.messageFormatting(message.mes, message.name, message.is_system, message.is_user, index);
+        template.content.querySelectorAll('img, video, video source').forEach(media => {
+            // Ignore explicitly hidden markup, while retaining off-screen and
+            // collapsed/spoiler content which the user can still open.
+            for (let el = media; el; el = el.parentElement) {
+                if (el.hidden || el.style.display === 'none' || el.style.visibility === 'hidden') return;
+            }
+            add(media.getAttribute('src'));
+            add(media.getAttribute('data-src'));
+            if (media.tagName === 'VIDEO') add(media.getAttribute('poster'));
+        });
+    });
+    return paths;
+}
+
+function refreshChatImages() {
+    let paths = null;
+    try {
+        paths = collectChatImagePaths(ctx());
+    } catch (error) {
+        console.warn(`[${MODULE_NAME}] Could not read current chat images`, error);
+    }
+    const ready = paths !== null;
+    paths ||= new Set();
+    const changed = ready !== state.chatImagesReady || paths.size !== state.chatImagePaths.size
+        || [...paths].some(path => !state.chatImagePaths.has(path));
+    state.chatImagePaths = paths;
+    state.chatImagesReady = ready;
+    if (changed) {
+        invalidateFilterCache();
+        if (state.chatFilter !== 'all') {
+            state.selected.clear();
+            state.currentPage = 1;
+        }
+    }
+    return changed;
+}
+
+function matchesChatFilter(img) {
+    if (state.chatFilter === 'all') return true;
+    if (!state.chatImagesReady) return false;
+    const visible = state.chatImagePaths.has(img.path);
+    return state.chatFilter === 'visible' ? visible : !visible;
+}
+
+function selectChatFilter(value) {
+    state.chatFilter = CHAT_FILTERS.includes(value) ? value : 'all';
+    state.selected.clear();
+    state.currentPage = 1;
+    refreshChatImages();
+    render();
+    queueVisibleSizes();
+    if (state.dom.grid) state.dom.grid.scrollTop = 0;
+}
+
+/** Keep floating windows in sync with edits, media swipes and chat switches. */
+function bindChatImageEvents() {
+    const c = ctx();
+    const types = c.eventTypes || c.event_types || {};
+    let timer;
+    const refresh = () => {
+        if (!state.isOpen) return;
+        if (refreshChatImages()) {
+            render();
+            queueVisibleSizes();
+        }
+    };
+    for (const name of [
+        'CHAT_CHANGED', 'CHAT_LOADED', 'MESSAGE_SENT', 'MESSAGE_RECEIVED',
+        'MESSAGE_UPDATED', 'MESSAGE_EDITED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED',
+        'IMAGE_SWIPED', 'MEDIA_ATTACHMENT_DELETED', 'USER_MESSAGE_RENDERED',
+        'CHARACTER_MESSAGE_RENDERED', 'GENERATION_ENDED', 'SETTINGS_UPDATED',
+    ]) {
+        if (!types[name]) continue;
+        c.eventSource?.on(types[name], () => {
+            if (!state.isOpen) return;
+            if (name === 'CHAT_CHANGED') {
+                state.selected.clear();
+                refresh();
+                renderSelectBar();
+            }
+            clearTimeout(timer);
+            timer = setTimeout(refresh, 100);
+        });
     }
 }
 
@@ -870,6 +1009,7 @@ async function loadAll() {
     // Re-entry guard: spam-clicking Refresh (or open + refresh) must not run
     // two overlapping scans that interleave their state writes.
     if (state.isLoading) return;
+    refreshChatImages();
     state.isLoading = true;
     renderLoading(true);
 
@@ -942,6 +1082,7 @@ async function loadAll() {
         state.images = images;
         // O(1) path -> image lookups for the size queue / card wiring.
         state.imageByPath = new Map(images.map(i => [i.path, i]));
+        refreshChatImages();
         invalidateFilterCache();
 
         // Garbage-collect trash records whose files no longer exist on
@@ -1124,6 +1265,7 @@ function getFilteredImages() {
     const cacheKey = [
         filterVersion,
         state.activeFolder,
+        state.chatFilter,
         state.sort,
     ].join('\u0000');
     if (state.filterCache && state.filterCache.key === cacheKey) {
@@ -1135,6 +1277,7 @@ function getFilteredImages() {
     const trashView = state.activeFolder === TRASH_FOLDER;
 
     const list = state.images.filter((img) => {
+        if (!matchesChatFilter(img)) return false;
         const isTrashedImg = trashed.has(img.path);
         // The Trash view shows ONLY trashed images (across every folder); every
         // other view excludes them entirely.
@@ -1252,6 +1395,7 @@ function getFolderStats() {
         }
     };
     for (const img of state.images) {
+        if (!matchesChatFilter(img)) continue;
         const size = state.sizeCache.get(img.path);
         if (trashed.has(img.path)) add(TRASH_FOLDER, size);
         else {
@@ -1565,8 +1709,10 @@ function renderGrid() {
         grid.innerHTML = '';
         if (state.dom.empty) {
             state.dom.empty.classList.remove('im_hidden');
+            const emptyKey = state.chatFilter === 'all' ? 'empty.none'
+                : state.chatImagesReady ? 'empty.chatFilter' : 'empty.chatUnavailable';
             state.dom.empty.innerHTML =
-                `<i class="fa-solid fa-image"></i><span>${escapeHtml(t('empty.none'))}</span>`;
+                `<i class="fa-solid fa-image"></i><span>${escapeHtml(t(emptyKey))}</span>`;
         }
         return;
     }
@@ -1842,10 +1988,11 @@ function bulkRestore() {
     queueVisibleSizes();
 }
 
-/** Restore EVERYTHING from the recycle bin in one click (no confirm needed —
+/** Restore the filtered recycle bin in one click (no confirm needed —
  *  restoring is safe, files aren't touched; the symmetric twin of "Empty"). */
 function restoreAllTrash() {
-    const trashPaths = getSettings().trash.map(e => e.path);
+    const trashed = getTrashSet();
+    const trashPaths = getFilteredImages().filter(img => trashed.has(img.path)).map(img => img.path);
     if (!trashPaths.length) return;
     const n = restorePathsFromTrash(trashPaths);
     for (const p of trashPaths) state.selected.delete(p);
@@ -1854,9 +2001,10 @@ function restoreAllTrash() {
     queueVisibleSizes();
 }
 
-/** Empty the entire recycle bin (permanently delete every trashed file). */
+/** Empty the filtered recycle bin (permanently delete the matching files). */
 async function emptyTrash() {
-    const trashPaths = unprotectedPaths(getSettings().trash.map(e => e.path));
+    const trashed = getTrashSet();
+    const trashPaths = unprotectedPaths(getFilteredImages().filter(img => trashed.has(img.path)).map(img => img.path));
     if (!trashPaths.length) return;
     const c = ctx();
     let knownSize = 0;
@@ -2681,6 +2829,7 @@ async function injectUI() {
         prevPage: $('im_prev_page'),
         nextPage: $('im_next_page'),
         sort: $('im_sort'),
+        chatFilter: $('im_chat_filter'),
         pageSize: $('im_page_size'),
         refresh: $('im_refresh'),
         themeToggle: $('im_theme_toggle'),
@@ -2711,6 +2860,8 @@ async function injectUI() {
 
 function bindEvents() {
     const d = state.dom;
+    bindChatImageEvents();
+    d.chatFilter?.addEventListener('change', () => selectChatFilter(d.chatFilter.value));
 
     // Close actions
     d.modal?.querySelectorAll('[data-im-action="close"]').forEach((el) => {

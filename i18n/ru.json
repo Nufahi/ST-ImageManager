@@ -36,6 +36,11 @@
   "select.deleteTitle": "Безвозвратно удалить выбранные файлы с сервера",
 
   "toolbar.folderSearchPh": "Найти папку",
+  "toolbar.chatFilterAria": "Видимость изображений в чате",
+  "toolbar.chatFilterTitle": "Видимость во всём открытом чате, в выбранной папке. Неактивные свайпы не считаются видимыми. Другие чаты не проверяются.",
+  "toolbar.chatFilter.all": "Все изображения",
+  "toolbar.chatFilter.visible": "Видны в чате",
+  "toolbar.chatFilter.notVisible": "Не видны в чате",
   "toolbar.sortTitle": "Сортировка изображений",
   "toolbar.sort.newest": "Сначала новые",
   "toolbar.sort.oldest": "Сначала старые",
@@ -67,9 +72,9 @@
   "toast.loadFailed": "Не удалось загрузить все папки. Повторите обновление — избранное и корзина сохранены.",
 
   "trash.empty": "Очистить",
-  "trash.emptyTitle": "Безвозвратно удалить всё содержимое корзины",
+  "trash.emptyTitle": "Безвозвратно удалить содержимое корзины с учётом выбранного фильтра",
   "trash.restoreAll": "Вернуть всё",
-  "trash.restoreAllTitle": "Восстановить все изображения из корзины",
+  "trash.restoreAllTitle": "Восстановить изображения из корзины с учётом выбранного фильтра",
 
   "page.prevTitle": "Предыдущая страница",
   "page.nextTitle": "Следующая страница",
@@ -78,6 +83,8 @@
 
   "status.loading": "Загрузка изображений...",
   "empty.none": "Здесь нет изображений. Чистить нечего!",
+  "empty.chatFilter": "В этой папке нет изображений, подходящих под выбранный режим видимости в чате.",
+  "empty.chatUnavailable": "Откройте чат, чтобы определить видимость изображений. Если чат уже открыт, обновите список.",
 
   "card.selectTitle": "Выбрать",
   "card.open": "Открыть: {{file}}",
@@ -106,7 +113,7 @@
   "toast.purgeConfirm.titleOne": "Удалить это изображение безвозвратно?",
   "toast.purgeConfirm.titleMany": "Удалить безвозвратно изображений: {{count}}?",
   "toast.emptyConfirm.title": "Очистить корзину ({{count}})?",
-  "toast.emptyConfirm.body": "Это безвозвратно удалит все файлы из корзины с сервера.",
+  "toast.emptyConfirm.body": "Это безвозвратно удалит с сервера файлы из корзины, подходящие под выбранный фильтр.",
 
   "toast.deleteConfirm.titleOne": "Удалить это изображение?",
   "toast.deleteConfirm.bodyOne": "Это безвозвратно удалит файл с сервера.",

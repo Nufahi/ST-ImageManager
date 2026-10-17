@@ -36,6 +36,11 @@
   "select.deleteTitle": "Permanently delete selected files from the server",
 
   "toolbar.folderSearchPh": "Find folder",
+  "toolbar.chatFilterAria": "Image visibility in chat",
+  "toolbar.chatFilterTitle": "Visibility throughout the current chat, within the selected folder. Inactive swipes are not visible. Other chats are not checked.",
+  "toolbar.chatFilter.all": "All images",
+  "toolbar.chatFilter.visible": "Visible in chat",
+  "toolbar.chatFilter.notVisible": "Not visible in chat",
   "toolbar.sortTitle": "Sort images",
   "toolbar.sort.newest": "Newest",
   "toolbar.sort.oldest": "Oldest",
@@ -67,9 +72,9 @@
   "toast.loadFailed": "Could not load every folder. Try refreshing again — favorites and recycle bin records are preserved.",
 
   "trash.empty": "Empty",
-  "trash.emptyTitle": "Permanently delete everything in the recycle bin",
+  "trash.emptyTitle": "Permanently delete recycle bin contents matching the current filter",
   "trash.restoreAll": "Restore all",
-  "trash.restoreAllTitle": "Restore everything from the recycle bin",
+  "trash.restoreAllTitle": "Restore recycle bin contents matching the current filter",
 
   "page.prevTitle": "Previous page",
   "page.nextTitle": "Next page",
@@ -78,6 +83,8 @@
 
   "status.loading": "Loading images...",
   "empty.none": "No images here. Nothing to clean!",
+  "empty.chatFilter": "No images in this folder match the selected chat visibility mode.",
+  "empty.chatUnavailable": "Open a chat to determine image visibility. If a chat is already open, refresh the list.",
 
   "card.selectTitle": "Select",
   "card.open": "Open: {{file}}",
@@ -106,7 +113,7 @@
   "toast.purgeConfirm.titleOne": "Delete this image permanently?",
   "toast.purgeConfirm.titleMany": "Permanently delete {{count}} image(s)?",
   "toast.emptyConfirm.title": "Empty the recycle bin ({{count}})?",
-  "toast.emptyConfirm.body": "This permanently removes every file in the recycle bin from the server.",
+  "toast.emptyConfirm.body": "This permanently removes the recycle bin files matching the current filter from the server.",
 
   "toast.deleteConfirm.titleOne": "Delete this image?",
   "toast.deleteConfirm.bodyOne": "This permanently removes the file from the server.",

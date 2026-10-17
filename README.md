@@ -19,6 +19,9 @@ out old images fast.
   on mobile data.
 - **Multi-select + bulk delete** — tick images and delete them all at once,
   with a confirmation that tells you how much space you'll free.
+- **Chat visibility filter** — show all images, only those visible in the
+  current chat, or only those not visible in it. Works with folder selection,
+  favorites, the recycle bin, counts and selection across every page.
 - **Clean Old** — delete everything older than N days. Reads the timestamp
   from the image filename when available and shows the space it will free
   before you confirm.
@@ -44,6 +47,30 @@ out old images fast.
 - Or run the slash command `/image-manager` (alias `/im`).
 
 ## How it works
+
+### Delete images not visible in the current chat
+
+1. Open the chat, then open **Image Manager**.
+2. Choose the character's folder (selected automatically when available), or
+   **All images** in the sidebar to include every folder.
+3. Choose **Not visible in chat** in the toolbar.
+4. Click the double-check **Select all** button, then **Delete** and confirm.
+   Favorites remain protected. You can also move the selection to the recycle bin.
+
+Visibility is checked against **the entire currently open chat**, including
+messages above the scroll position and older messages not yet rendered on screen.
+The filter reads the active message text (formatted Markdown/HTML) and image/video
+attachments. Inactive message swipes and unselected images in a media gallery
+count as not visible; a media list counts all its displayed attachments.
+It refreshes when the chat changes, when messages/images change, and on **Refresh**.
+Changing the visibility filter clears the selection.
+
+**Other chats and branches are not scanned:** “not visible” means absent from the
+current chat view, not unused everywhere. Files may still be referenced by another
+chat or an inactive swipe. When no chat is open, the two chat-specific modes show
+an empty view with a prompt to open a chat; **All images** remains available.
+
+### Server API
 
 The extension is purely client-side. It uses SillyTavern's existing image API:
 
